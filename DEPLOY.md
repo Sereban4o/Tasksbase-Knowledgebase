@@ -133,14 +133,17 @@ docker compose -f docker-compose.prod.yml logs -f --tail=100
 
 ## Эксплуатация
 
-### Обновление кода
+### Краткое обновление кода
 
 ```bash
-git pull
+git fetch --tags --prune
+git checkout master && git pull --ff-only      # или конкретный тег: git checkout vX.Y.Z
 docker compose -f docker-compose.prod.yml up -d --build
 docker compose -f docker-compose.prod.yml exec app php artisan migrate --force
 docker compose -f docker-compose.prod.yml exec app php artisan config:cache
 ```
+
+> Полный процесс релиза (ветки, теги, откат, CI) — в разделе **«Релиз через Git»** ниже.
 
 ### Перезапуск
 
@@ -165,6 +168,149 @@ docker run --rm -v tasksbase-knowledgebase_storage_data:/data -v $PWD:/backup al
 
 ---
 
+## Релиз через Git
+
+### Ветки и версии
+
+- `master` — стабильная ветка, **совпадает с продом**.
+- `feature/*`, `fix/*`, `hotfix/*` — рабочие ветки, вливаются в `master` через Pull Request.
+- Релиз помечается тегом `vMAJOR.MINOR.PATCH` (например `v1.0.0`, `v1.0.1`, `v1.1.0`).
+- Тег — неизменяемый срез кода для прода. Откат = `git checkout` предыдущего тега.
+
+### Первый деплой сервера (клонирование)
+
+```bash
+sudo mkdir -p /opt/tasksbase && sudo chown $USER /opt/tasksbase
+git clone https://github.com/Sereban4o/Tasksbase-Knowledgebase.git /opt/tasksbase
+cd /opt/tasksbase
+git checkout master           # или нужный тег: git checkout v1.0.0
+
+cp backend/.env.production.example backend/.env.production
+# заполнить секреты (см. «Подготовка и запуск»)
+
+docker compose -f docker-compose.prod.yml up -d --build
+docker compose -f docker-compose.prod.yml exec app php artisan migrate --force
+docker compose -f docker-compose.prod.yml exec app php artisan db:seed --force   # опционально
+```
+
+> `backend/.env.production` в git **не хранится** (в `.gitignore`). Создаётся один раз на сервере; `git pull` / `git checkout` его **не перезаписывают**.
+
+### Выпуск релиза (локально / CI)
+
+```bash
+git checkout master
+git pull --ff-only
+git merge --no-ff feature/xyz
+
+# прогон тестов и сборки перед тегом
+(cd backend && php artisan test)
+(cd frontend && npm run build)
+
+git tag -a v1.0.0 -m "Release v1.0.0"
+git push origin master
+git push origin v1.0.0        # отправить тег (git push origin --tags — все теги)
+```
+
+### Деплой тега на сервере
+
+```bash
+cd /opt/tasksbase
+git fetch --tags --prune
+git checkout v1.0.0
+
+# пересборка образов (SPA собирается внутри nginx-образа)
+docker compose -f docker-compose.prod.yml build --pull
+docker compose -f docker-compose.prod.yml up -d
+
+# миграции + кэш
+docker compose -f docker-compose.prod.yml exec app php artisan migrate --force
+docker compose -f docker-compose.prod.yml exec app php artisan config:cache
+docker compose -f docker-compose.prod.yml exec app php artisan route:cache
+docker compose -f docker-compose.prod.yml exec app php artisan view:cache
+
+# проверка
+curl -fsS http://localhost/up && echo OK
+docker compose -f docker-compose.prod.yml ps
+```
+
+`git checkout <тег>` переводит репозиторий в detached HEAD — для прода это нормально. Вернуться на ветку: `git checkout master`.
+
+Узнать развёрнутую версию:
+
+```bash
+git describe --tags --always
+```
+
+### Откат (rollback)
+
+```bash
+cd /opt/tasksbase
+git fetch --tags
+git checkout v1.0.0           # предыдущий стабильный тег
+docker compose -f docker-compose.prod.yml up -d --build
+docker compose -f docker-compose.prod.yml exec app php artisan config:clear
+docker compose -f docker-compose.prod.yml exec app php artisan config:cache
+```
+
+> Откат кода **не откатывает миграции**. Если релиз содержал миграции — либо `php artisan migrate:rollback` (только если `down()` реализован), либо восстановление БД из бэкапа (см. «Бэкап БД»). Предпочтительнее «forward-fix» новым тегом.
+
+### Hotfix
+
+```bash
+git checkout -b hotfix/critical-bug master
+# ... правки + тесты ...
+git commit -am "Fix critical bug"
+git checkout master && git merge --no-ff hotfix/critical-bug
+git tag -a v1.0.1 -m "Hotfix v1.0.1"
+git push origin master v1.0.1
+```
+
+Затем на сервере — «Деплой тега» с `v1.0.1`.
+
+### Доступ к репозиторию на сервере
+
+- Используйте **deploy key** (SSH, read-only) или токен только на чтение.
+- Приватный репо по SSH:
+
+```bash
+ssh-keygen -t ed25519 -C "deploy@tasksbase" -f ~/.ssh/id_ed25519 -N ""
+cat ~/.ssh/id_ed25519.pub          # добавить в GitHub → Settings → Deploy keys (read-only)
+git remote set-url origin git@github.com:Sereban4o/Tasksbase-Knowledgebase.git
+```
+
+### CI/CD (опционально, GitHub Actions)
+
+На пуш тега `v*` — прогон тестов и деплой по SSH. Пример `.github/workflows/deploy.yml`:
+
+```yaml
+name: Deploy
+on:
+  push:
+    tags: ['v*']
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          script: |
+            cd /opt/tasksbase
+            git fetch --tags --prune
+            git checkout ${{ github.ref_name }}
+            docker compose -f docker-compose.prod.yml up -d --build
+            docker compose -f docker-compose.prod.yml exec app php artisan migrate --force
+            docker compose -f docker-compose.prod.yml exec app php artisan config:cache
+```
+
+Секреты `DEPLOY_HOST`, `DEPLOY_USER`, `DEPLOY_SSH_KEY` задайте в настройках репозитория (Settings → Secrets and variables → Actions).
+
+> SPA собирается внутри `nginx`-образа, поэтому после `git checkout` обязательно пересобирайте `nginx` (`up -d --build`). Ключ `REVERB_APP_KEY` попадает в клиентский бандл на этапе сборки.
+
+---
+
 ## Добавление HTTPS позже
 
 1. Получите домен, направьте A-запись на `IP` (или выпустите сертификат на IP через certbot/acme).
@@ -181,4 +327,5 @@ docker run --rm -v tasksbase-knowledgebase_storage_data:/data -v $PWD:/backup al
 - [ ] `APP_DEBUG=false`, `APP_ENV=production`
 - [ ] Наружу открыты только 22/80 (443 позже); БД, Redis, Meilisearch, Reverb **не** опубликованы
 - [ ] SSH ограничен по IP (по возможности)
+- [ ] `.env` / `.env.production` не в git (только `*.example`), доступ к репо — deploy key (read-only)
 - [ ] Настроен регулярный бэкап БД и `storage_data`

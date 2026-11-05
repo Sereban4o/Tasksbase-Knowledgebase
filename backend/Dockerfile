@@ -40,8 +40,16 @@ RUN ln -sfn /var/www/html/storage/app/public /var/www/html/public/storage
 # Install dependencies
 RUN composer install --no-interaction --optimize-autoloader --no-plugins --no-scripts --prefer-dist 2>/dev/null || true
 
-# Set permissions
-RUN chown -R www-data:www-data /var/www/html/storage /var/www/html/bootstrap/cache
+# Ensure runtime directories exist (repo may omit empty storage dirs) and set permissions
+RUN mkdir -p \
+        storage/app/public \
+        storage/framework/cache/data \
+        storage/framework/sessions \
+        storage/framework/testing \
+        storage/framework/views \
+        storage/logs \
+        bootstrap/cache \
+    && chown -R www-data:www-data storage bootstrap/cache
 
 EXPOSE 9000
 

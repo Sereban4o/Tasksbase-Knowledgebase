@@ -5,6 +5,7 @@
     "keywords": ["laravel", "framework", "tasksbase", "knowledgebase"],
     "license": "MIT",
     "require": {
+        "darkaonline/l5-swagger": "^11.3",
         "php": "^8.5",
         "laravel/framework": "^13.0",
         "laravel/sanctum": "^4.0",
@@ -12,7 +13,6 @@
         "guzzlehttp/guzzle": "^7.2"
     },
     "require-dev": {
-        "darkaonline/l5-swagger": "^11.3",
         "fakerphp/faker": "^1.23",
         "laravel/pint": "^1.32",
         "laravel/sail": "^1.26",

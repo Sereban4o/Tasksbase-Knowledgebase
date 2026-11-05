@@ -1,11 +1,17 @@
 package com.tasksbase.chat.data.repository
 
+import android.content.ContentResolver
+import android.net.Uri
 import com.tasksbase.chat.data.remote.ApiService
 import com.tasksbase.chat.data.remote.ChatDto
 import com.tasksbase.chat.data.remote.CreateChatRequest
+import com.tasksbase.chat.data.remote.FileDto
 import com.tasksbase.chat.data.remote.MessageDto
 import com.tasksbase.chat.data.remote.SendMessageRequest
 import com.tasksbase.chat.data.remote.UserDto
+import okhttp3.MediaType.Companion.toMediaTypeOrNull
+import okhttp3.MultipartBody
+import okhttp3.RequestBody.Companion.toRequestBody
 
 class ChatRepository(private val api: ApiService) {
 
@@ -29,4 +35,25 @@ class ChatRepository(private val api: ApiService) {
         description: String?,
         userIds: List<Int>,
     ): ChatDto = api.createChat(CreateChatRequest(type, name, description, userIds))
+
+    /** Uploads a picked file/image (GIF is an image), then sends it as a message. */
+    suspend fun sendAttachment(chatId: Int, uri: Uri, contentResolver: ContentResolver): MessageDto {
+        val mime = contentResolver.getType(uri) ?: "application/octet-stream"
+        val bytes = contentResolver.openInputStream(uri)?.use { it.readBytes() }
+            ?: throw IllegalStateException("Не удалось прочитать файл")
+
+        val part = MultipartBody.Part.createFormData(
+            "file",
+            "upload_${System.currentTimeMillis()}",
+            bytes.toRequestBody(mime.toMediaTypeOrNull()),
+        )
+
+        val uploaded: FileDto = api.uploadFile(part)
+        val type = if (mime.startsWith("image/")) "image" else "file"
+
+        return api.sendMessage(
+            chatId,
+            SendMessageRequest(body = null, type = type, fileIds = listOf(uploaded.id)),
+        )
+    }
 }

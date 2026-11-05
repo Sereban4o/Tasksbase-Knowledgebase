@@ -14,9 +14,11 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ExitToApp
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Scaffold
@@ -39,6 +41,7 @@ import androidx.compose.ui.unit.sp
 import com.tasksbase.chat.data.remote.ChatDto
 import com.tasksbase.chat.data.remote.UserDto
 import com.tasksbase.chat.di.ServiceLocator
+import com.tasksbase.chat.notifications.RealtimeService
 import com.tasksbase.chat.ui.components.CenterError
 import com.tasksbase.chat.ui.components.CenterProgress
 import com.tasksbase.chat.ui.components.CenterText
@@ -61,6 +64,7 @@ import kotlinx.coroutines.launch
 @Composable
 fun ChatListScreen(
     onOpenChat: (ChatDto) -> Unit,
+    onAddAccount: () -> Unit,
     onLoggedOut: () -> Unit,
 ) {
     val scope = rememberCoroutineScope()
@@ -69,6 +73,9 @@ fun ChatListScreen(
     var error by remember { mutableStateOf<String?>(null) }
     var showCreate by remember { mutableStateOf(false) }
     var users by remember { mutableStateOf<List<UserDto>>(emptyList()) }
+    var accountMenu by remember { mutableStateOf(false) }
+
+    val active = ServiceLocator.activeAccount
 
     LaunchedEffect(Unit) {
         while (isActive) {
@@ -92,23 +99,82 @@ fun ChatListScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Чаты", fontWeight = FontWeight.Bold) },
+                title = {
+                    Box {
+                        Column(
+                            modifier = Modifier.clickable { accountMenu = true },
+                        ) {
+                            Text(
+                                text = active?.user?.fullName ?: "Чаты",
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 16.sp,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                            Text(
+                                text = active?.display ?: "Выберите сервер",
+                                fontSize = 11.sp,
+                                color = TgSecondary,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        }
+
+                        DropdownMenu(
+                            expanded = accountMenu,
+                            onDismissRequest = { accountMenu = false },
+                        ) {
+                            ServiceLocator.accounts.forEach { account ->
+                                DropdownMenuItem(
+                                    text = {
+                                        Column {
+                                            Text(account.user.fullName)
+                                            Text(
+                                                text = account.display,
+                                                fontSize = 11.sp,
+                                                color = TgSecondary,
+                                            )
+                                        }
+                                    },
+                                    onClick = {
+                                        accountMenu = false
+                                        if (account.id != active?.id) {
+                                            scope.launch {
+                                                ServiceLocator.setActive(account.id)
+                                                runCatching { RealtimeService.stop(ServiceLocator.appContext) }
+                                                runCatching { RealtimeService.start(ServiceLocator.appContext) }
+                                            }
+                                        }
+                                    },
+                                )
+                            }
+                            HorizontalDivider()
+                            DropdownMenuItem(
+                                text = { Text("Добавить аккаунт") },
+                                onClick = {
+                                    accountMenu = false
+                                    onAddAccount()
+                                },
+                            )
+                            DropdownMenuItem(
+                                text = { Text("Выйти") },
+                                onClick = {
+                                    accountMenu = false
+                                    scope.launch {
+                                        ServiceLocator.authRepository.logout()
+                                        onLoggedOut()
+                                    }
+                                },
+                            )
+                        }
+                    }
+                },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = androidx.compose.ui.graphics.Color.White,
                 ),
                 actions = {
                     IconButton(onClick = { showCreate = true }) {
                         Icon(Icons.Default.Add, contentDescription = "Новый чат")
-                    }
-                    IconButton(
-                        onClick = {
-                            scope.launch {
-                                ServiceLocator.authRepository.logout()
-                                onLoggedOut()
-                            }
-                        },
-                    ) {
-                        Icon(Icons.AutoMirrored.Filled.ExitToApp, contentDescription = "Выйти")
                     }
                 },
             )

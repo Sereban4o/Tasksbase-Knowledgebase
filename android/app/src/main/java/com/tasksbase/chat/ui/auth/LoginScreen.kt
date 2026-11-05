@@ -44,16 +44,35 @@ fun LoginScreen(onLoggedIn: () -> Unit) {
     var loading by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
     var showServerDialog by remember { mutableStateOf(false) }
-    var serverLabel by remember { mutableStateOf(ServiceLocator.server.display) }
+
+    val initialServer = remember { ServiceLocator.server }
+    var host by remember { mutableStateOf(initialServer.host) }
+    var port by remember { mutableStateOf(initialServer.port.toString()) }
+    var ntfyHost by remember { mutableStateOf("") }
+    var ntfyPort by remember { mutableStateOf("8081") }
+
     val scope = rememberCoroutineScope()
 
     fun submit() {
         if (loading) return
+        val parsedPort = port.toIntOrNull()
+        if (parsedPort == null || parsedPort !in 1..65535) {
+            error = "Некорректный порт сервера"
+            return
+        }
+        val parsedNtfyPort = ntfyPort.toIntOrNull() ?: 8081
+
         error = null
         loading = true
         scope.launch {
             try {
-                ServiceLocator.authRepository.login(email, password)
+                ServiceLocator.authRepository.login(
+                    email = email,
+                    password = password,
+                    server = ServerConfig(normalizeHost(host), parsedPort),
+                    ntfyHost = normalizeHost(ntfyHost),
+                    ntfyPort = parsedNtfyPort,
+                )
                 onLoggedIn()
             } catch (e: Exception) {
                 error = friendlyError(e)
@@ -70,10 +89,15 @@ fun LoginScreen(onLoggedIn: () -> Unit) {
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Text("Tasksbase Chat", fontSize = 28.sp, fontWeight = FontWeight.Bold, color = TgAccent)
+        Text("Чат", fontSize = 28.sp, fontWeight = FontWeight.Bold, color = TgAccent)
         Spacer(Modifier.height(6.dp))
         TextButton(onClick = { showServerDialog = true }) {
-            Text("Сервер: $serverLabel", fontSize = 12.sp, color = TgSecondary)
+            Text(
+                "Сервер: ${normalizeHost(host)}:$port" +
+                    if (ntfyHost.isNotBlank()) "  ·  ntfy: ${normalizeHost(ntfyHost)}:$ntfyPort" else "",
+                fontSize = 12.sp,
+                color = TgSecondary,
+            )
         }
         Spacer(Modifier.height(18.dp))
 
@@ -123,10 +147,16 @@ fun LoginScreen(onLoggedIn: () -> Unit) {
 
     if (showServerDialog) {
         ServerSettingsDialog(
-            initial = ServiceLocator.server,
+            initialHost = host,
+            initialPort = port,
+            initialNtfyHost = ntfyHost,
+            initialNtfyPort = ntfyPort,
             onDismiss = { showServerDialog = false },
-            onSaved = { config ->
-                serverLabel = config.display
+            onSaved = { newHost, newPort, newNtfyHost, newNtfyPort ->
+                host = newHost
+                port = newPort
+                ntfyHost = newNtfyHost
+                ntfyPort = newNtfyPort
                 showServerDialog = false
             },
         )
@@ -135,25 +165,28 @@ fun LoginScreen(onLoggedIn: () -> Unit) {
 
 @Composable
 private fun ServerSettingsDialog(
-    initial: ServerConfig,
+    initialHost: String,
+    initialPort: String,
+    initialNtfyHost: String,
+    initialNtfyPort: String,
     onDismiss: () -> Unit,
-    onSaved: (ServerConfig) -> Unit,
+    onSaved: (String, String, String, String) -> Unit,
 ) {
-    var host by remember { mutableStateOf(initial.host) }
-    var port by remember { mutableStateOf(initial.port.toString()) }
+    var host by remember { mutableStateOf(initialHost) }
+    var port by remember { mutableStateOf(initialPort) }
+    var ntfyHost by remember { mutableStateOf(initialNtfyHost) }
+    var ntfyPort by remember { mutableStateOf(initialNtfyPort) }
     var error by remember { mutableStateOf<String?>(null) }
-    var saving by remember { mutableStateOf(false) }
-    val scope = rememberCoroutineScope()
 
     AlertDialog(
-        onDismissRequest = { if (!saving) onDismiss() },
-        title = { Text("Адрес сервера") },
+        onDismissRequest = onDismiss,
+        title = { Text("Адреса серверов") },
         text = {
             Column {
                 OutlinedTextField(
                     value = host,
                     onValueChange = { host = it },
-                    label = { Text("Адрес (домен или IP)") },
+                    label = { Text("Сервер (IP или домен)") },
                     singleLine = true,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
                     modifier = Modifier.fillMaxWidth(),
@@ -162,7 +195,25 @@ private fun ServerSettingsDialog(
                 OutlinedTextField(
                     value = port,
                     onValueChange = { value -> port = value.filter { it.isDigit() } },
-                    label = { Text("Порт") },
+                    label = { Text("Порт сервера") },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                Spacer(Modifier.height(12.dp))
+                OutlinedTextField(
+                    value = ntfyHost,
+                    onValueChange = { ntfyHost = it },
+                    label = { Text("ntfy сервер (необязательно)") },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                Spacer(Modifier.height(8.dp))
+                OutlinedTextField(
+                    value = ntfyPort,
+                    onValueChange = { value -> ntfyPort = value.filter { it.isDigit() } },
+                    label = { Text("Порт ntfy") },
                     singleLine = true,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     modifier = Modifier.fillMaxWidth(),
@@ -173,7 +224,7 @@ private fun ServerSettingsDialog(
                 }
                 Spacer(Modifier.height(8.dp))
                 Text(
-                    "Например: Внутренний IP и 80. Без http:// и без пути.",
+                    "Например: сервер 212.109.16.56:80, ntfy 212.109.16.56:8081",
                     fontSize = 11.sp,
                     color = TgSecondary,
                 )
@@ -181,29 +232,24 @@ private fun ServerSettingsDialog(
         },
         confirmButton = {
             TextButton(
-                enabled = !saving,
                 onClick = {
-                    val normalizedHost = normalizeHost(host)
                     val parsedPort = port.toIntOrNull()
-
-                    if (normalizedHost.isBlank()) {
+                    if (normalizeHost(host).isBlank()) {
                         error = "Укажите адрес сервера"
                     } else if (parsedPort == null || parsedPort !in 1..65535) {
-                        error = "Порт должен быть от 1 до 65535"
+                        error = "Порт сервера: 1..65535"
+                    } else if (ntfyHost.isNotBlank() && (ntfyPort.toIntOrNull() ?: 0) !in 1..65535) {
+                        error = "Порт ntfy: 1..65535"
                     } else {
-                        saving = true
-                        scope.launch {
-                            ServiceLocator.saveServer(normalizedHost, parsedPort)
-                            onSaved(ServerConfig(normalizedHost, parsedPort))
-                        }
+                        onSaved(normalizeHost(host), parsedPort.toString(), normalizeHost(ntfyHost), ntfyPort)
                     }
                 },
             ) {
-                Text(if (saving) "Сохранение..." else "Сохранить")
+                Text("Готово")
             }
         },
         dismissButton = {
-            TextButton(enabled = !saving, onClick = onDismiss) { Text("Отмена") }
+            TextButton(onClick = onDismiss) { Text("Отмена") }
         },
     )
 }

@@ -20,6 +20,7 @@ import org.json.JSONObject
 class RealtimeService : Service() {
 
     private var client: RealtimeClient? = null
+    private var ntfy: NtfyClient? = null
 
     override fun onCreate() {
         super.onCreate()
@@ -47,6 +48,18 @@ class RealtimeService : Service() {
         realtime.connect()
         realtime.subscribe("private-user.${user.id}")
         client = realtime
+
+        // Per-account ntfy subscription (each account may use a different server).
+        val account = ServiceLocator.activeAccount
+        ntfy?.close()
+        ntfy = null
+        if (account != null && account.ntfyHost.isNotBlank()) {
+            ntfy = NtfyClient(account.ntfyBaseUrl, account.ntfyTopic) { obj ->
+                val title = obj.optString("title").ifBlank { "Tasksbase" }
+                val text = obj.optString("message").ifBlank { "Новое уведомление" }
+                NotificationHelper.showMessage(this, title, text)
+            }.also { it.connect() }
+        }
     }
 
     private fun handleMessage(data: JSONObject) {
@@ -72,6 +85,8 @@ class RealtimeService : Service() {
     override fun onDestroy() {
         client?.close()
         client = null
+        ntfy?.close()
+        ntfy = null
         super.onDestroy()
     }
 

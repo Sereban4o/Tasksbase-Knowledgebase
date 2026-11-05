@@ -2,7 +2,6 @@ package com.tasksbase.chat
 
 import android.app.Application
 import com.tasksbase.chat.di.ServiceLocator
-import com.tasksbase.chat.di.Session
 import com.tasksbase.chat.notifications.RealtimeService
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -14,13 +13,10 @@ class ChatApplication : Application() {
         ServiceLocator.init(this)
 
         CoroutineScope(Dispatchers.IO).launch {
-            ServiceLocator.loadServerConfig()
-            val (token, user) = ServiceLocator.tokenStore.load()
-            Session.token = token
-            Session.currentUser = user
+            ServiceLocator.loadAccounts()
             ServiceLocator.sessionReady.value = true
 
-            if (token != null && user != null) {
+            if (ServiceLocator.activeAccount != null) {
                 runCatching { RealtimeService.start(this@ChatApplication) }
             }
         }

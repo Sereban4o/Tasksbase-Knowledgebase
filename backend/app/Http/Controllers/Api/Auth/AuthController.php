@@ -14,6 +14,10 @@ class AuthController extends Controller
 {
     public function register(Request $request)
     {
+        if (!config('app.allow_registration', true)) {
+            return response()->json(['message' => 'Registration is disabled'], 403);
+        }
+
         $validated = $request->validate([
             'email' => 'required|email|unique:users',
             'password' => 'required|min:8|confirmed',

@@ -1,0 +1,19 @@
+# Normalize line endings across Windows dev / Linux prod
+* text=auto eol=lf
+
+# Shell scripts must stay LF (used inside Linux containers)
+*.sh text eol=lf
+docker/entrypoint.sh text eol=lf
+
+# Windows scripts
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+# Binary
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.apk binary
+*.aab binary

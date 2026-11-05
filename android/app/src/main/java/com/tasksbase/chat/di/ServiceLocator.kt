@@ -3,9 +3,12 @@ package com.tasksbase.chat.di
 import android.content.Context
 import com.google.gson.Gson
 import com.tasksbase.chat.BuildConfig
+import com.tasksbase.chat.data.local.ServerConfig
+import com.tasksbase.chat.data.local.ServerConfigStore
 import com.tasksbase.chat.data.local.TokenStore
 import com.tasksbase.chat.data.remote.ApiService
 import com.tasksbase.chat.data.remote.AuthInterceptor
+import com.tasksbase.chat.data.remote.ServerAddressInterceptor
 import com.tasksbase.chat.data.repository.AuthRepository
 import com.tasksbase.chat.data.repository.ChatRepository
 import com.tasksbase.chat.realtime.RealtimeClient
@@ -29,8 +32,16 @@ object ServiceLocator {
 
     val tokenStore: TokenStore by lazy { TokenStore(appContext) }
 
+    val serverConfigStore: ServerConfigStore by lazy { ServerConfigStore(appContext) }
+
+    /** Current server address, kept in memory for fast access. */
+    @Volatile
+    var server: ServerConfig = ServerConfig.default()
+        private set
+
     val okHttp: OkHttpClient by lazy {
         OkHttpClient.Builder()
+            .addInterceptor(ServerAddressInterceptor { server })
             .addInterceptor(AuthInterceptor { Session.token })
             .addInterceptor(HttpLoggingInterceptor().apply { level = HttpLoggingInterceptor.Level.BASIC })
             .connectTimeout(20, TimeUnit.SECONDS)
@@ -40,7 +51,9 @@ object ServiceLocator {
 
     val api: ApiService by lazy {
         Retrofit.Builder()
-            .baseUrl(BuildConfig.API_BASE_URL)
+            // Neutral base URL: the real scheme/host/port are applied by
+            // ServerAddressInterceptor from the runtime configuration.
+            .baseUrl("http://localhost/api/v1/")
             .client(okHttp)
             .addConverterFactory(GsonConverterFactory.create(gson))
             .build()
@@ -54,11 +67,31 @@ object ServiceLocator {
         appContext = context.applicationContext
     }
 
-    fun newRealtime(): RealtimeClient = RealtimeClient(
-        host = BuildConfig.WS_HOST,
-        port = BuildConfig.WS_PORT,
-        key = BuildConfig.WS_KEY,
-        authUrl = BuildConfig.BROADCAST_AUTH_URL,
-        tokenProvider = { Session.token },
-    )
+    /** Loads the persisted server address into memory (call once at startup). */
+    suspend fun loadServerConfig() {
+        server = serverConfigStore.load()
+    }
+
+    /**
+     * Persists a new server address and drops the current session, because a
+     * token issued by one server is not valid on another one.
+     */
+    suspend fun saveServer(host: String, port: Int) {
+        val config = ServerConfig(host, port)
+        serverConfigStore.save(config)
+        server = config
+        runCatching { tokenStore.clear() }
+        Session.reset()
+    }
+
+    fun newRealtime(): RealtimeClient {
+        val config = server
+        return RealtimeClient(
+            host = config.wsHost,
+            port = config.wsPort,
+            key = BuildConfig.WS_KEY,
+            authUrl = config.broadcastAuthUrl,
+            tokenProvider = { Session.token },
+        )
+    }
 }

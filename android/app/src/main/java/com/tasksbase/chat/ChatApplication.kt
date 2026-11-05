@@ -13,6 +13,7 @@ class ChatApplication : Application() {
         ServiceLocator.init(this)
 
         CoroutineScope(Dispatchers.IO).launch {
+            ServiceLocator.loadServerConfig()
             val (token, user) = ServiceLocator.tokenStore.load()
             Session.token = token
             Session.currentUser = user

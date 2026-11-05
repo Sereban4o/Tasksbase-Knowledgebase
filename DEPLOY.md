@@ -1,59 +1,33 @@
-# Деплой в прод (Ubuntu + Docker)
+# Релиз и деплой через Git — по порядку действий
 
-**Внешний IP:** `IP`
-**Внутренний IP сервера (Ubuntu + Docker):** `IP`
-**Доступ:** по IP, без HTTPS (HTTP). WebSocket отдаётся через nginx (при добавлении TLS тот же конфиг заработает как `wss` на 443).
+> **Параметры деплоя**
+> - Внешний IP (публичный): **212.109.16.56**
+> - Внутренний IP сервера (Ubuntu + Docker): **192.168.0.5**
+> - Репозиторий: `https://github.com/Sereban4o/Tasksbase-Knowledgebase`
+> - Каталог проекта на сервере: `/opt/tasksbase`
+> - Доступ: HTTP по IP, HTTPS пока нет. WebSocket идёт через nginx (`ws://`), при включении TLS станет `wss://`.
 
----
-
-## Архитектура
-
-```
-Интернет ──► IP:80 ──► nginx (контейнер)
-                                   ├── /              → SPA (статика из образа)
-                                   ├── /assets/*      → SPA (статика)
-                                   ├── /app/*         → Reverb (WebSocket, ws://)
-                                   ├── /api/*         → Laravel (PHP-FPM app:9000)
-                                   ├── /sanctum/*     → Laravel
-                                   ├── /broadcasting/ → Laravel
-                                   ├── /storage/*     → Laravel
-                                   ├── /admin         → Laravel (Blade-админка)
-                                   └── /up, /docs     → Laravel
-
-Внутренняя Docker-сеть (наружу НЕ публикуется):
-  app (php-fpm :9000)   worker (queue)   reverb (:8080)
-  postgres (:5432)      redis (:6379)    meilisearch (:7700)
-```
-
-Публикуется **только порт 80** (nginx). Всё остальное доступно лишь внутри Docker-сети.
+Стек: Laravel 13 (PHP 8.5) + React 19 + PostgreSQL 18 + Redis + Reverb + Meilisearch.
+Публикуется **только порт 80** (nginx). SPA собирается внутри `nginx`-образа.
 
 ---
 
-## Какие порты открыть
+## Шаг 1. Открыть порты
 
-### Публичные (firewall + NAT роутера → 192.168.0.5)
+### 1.1 Публичные (firewall + NAT роутера → 192.168.0.5)
 
-| Порт | Протокол | Назначение | Обязательность |
-|------|----------|-----------|----------------|
-| **22**  | TCP | SSH (администрирование) | обязательно (лучше ограничить по IP) |
-| **80**  | TCP | Сайт + API + WebSocket (`ws://`) | обязательно |
-| **443** | TCP | HTTPS/`wss` (на будущее) | опционально |
+| Порт | Назначение | Обязательность |
+|------|-----------|----------------|
+| **22/tcp** | SSH | да (по возможности ограничить по IP) |
+| **80/tcp** | Сайт + API + WebSocket (`ws://`) | да |
+| **443/tcp** | HTTPS/`wss` | опционально (позже) |
 
-### Внутренние (НЕ открывать в интернет!)
+### 1.2 Внутренние — НЕ открывать в интернет
 
-Эти порты используются только внутри Docker-сети и в прод-`docker-compose.prod.yml` **не публикуются**:
+`5432` (PostgreSQL), `6379` (Redis), `7700` (Meilisearch), `8080` (Reverb), `9000` (PHP-FPM).
+В прод-`docker-compose.prod.yml` они не публикуются — доступны только внутри Docker-сети.
 
-| Порт | Сервис |
-|------|--------|
-| 5432 | PostgreSQL |
-| 6379 | Redis |
-| 7700 | Meilisearch |
-| 8080 | Reverb (WebSocket, доступен только через nginx) |
-| 9000 | PHP-FPM |
-
-> Если сервер за NAT-роутером (внешний `IP`), пробросьте на `IP` только **80** (и **22** для SSH). Остальное наружу не пробрасывать.
-
-### UFW (пример)
+### 1.3 UFW на сервере
 
 ```bash
 sudo ufw allow 22/tcp
@@ -63,224 +37,264 @@ sudo ufw enable
 sudo ufw status
 ```
 
-> Docker управляет iptables напрямую. Так как наружу публикуется только `80`, этого достаточно. Порты из других сервисов не публикуются в прод-конфиге.
+> Если сервер за NAT-роутером: пробросьте на `192.168.0.5` только **80** (и **22** для SSH).
 
 ---
 
-## Подготовка и запуск
+## Шаг 2. Подготовить сервер (один раз)
 
-Выполнять на сервере `IP` в каталоге проекта.
-
-### 1. Конфигурация окружения
+### 2.1 Проверить Docker
 
 ```bash
-cp backend/.env.production.example backend/.env.production
+docker --version
+docker compose version
+git --version
 ```
 
-Отредактируйте `backend/.env.production`:
-
-- Сгенерируйте `APP_KEY`:
-  ```bash
-  php -r "echo 'base64:'.base64_encode(random_bytes(32)).PHP_EOL;"
-  ```
-  и вставьте: `APP_KEY=base64:...`
-- Замените `CHANGE_ME_*`: `POSTGRES_PASSWORD`, `DB_PASSWORD` (должны совпадать), `REVERB_APP_SECRET`, `MEILI_MASTER_KEY`.
-- `REVERB_APP_KEY` оставьте `chat-key` (или задайте свой **и** пересоберите nginx с тем же ключом: `REVERB_APP_KEY=ваш_ключ docker compose -f docker-compose.prod.yml build nginx`).
-- `APP_URL`, `SANCTUM_STATEFUL_DOMAINS`, `CORS_ALLOWED_ORIGINS` уже указывают на `IP`.
-
-### 2. Сборка и запуск
+### 2.2 Создать каталог проекта
 
 ```bash
-docker compose -f docker-compose.prod.yml up -d --build
+sudo mkdir -p /opt/tasksbase
+sudo chown $USER:$USER /opt/tasksbase
 ```
 
-### 3. Инициализация БД
+### 2.3 Настроить доступ к репозиторию (deploy key, read-only)
 
 ```bash
-docker compose -f docker-compose.prod.yml exec app php artisan migrate --force
-docker compose -f docker-compose.prod.yml exec app php artisan db:seed --force
-```
-
-> `--seed` создаёт демо-данные (пользователи, доска «Доска задач»). Демо-админ: `admin@example.com` / `password` — **обязательно смените пароль**. Если демо-данные не нужны, выполните seed только нужных классов: `db:seed --class=UserSeeder`, `--class=IssueStatusSeeder` и т.д.
-
-### 4. Кэш конфигурации (опционально, ускоряет прод)
-
-```bash
-docker compose -f docker-compose.prod.yml exec app php artisan config:cache
-docker compose -f docker-compose.prod.yml exec app php artisan route:cache
-docker compose -f docker-compose.prod.yml exec app php artisan view:cache
-```
-
-> После изменения `backend/.env.production` пересоздайте app и сбросьте кэш:
-> ```bash
-> docker compose -f docker-compose.prod.yml exec app php artisan config:clear
-> docker compose -f docker-compose.prod.yml up -d --force-recreate app worker reverb
-> ```
-
-### 5. Проверка
-
-- Сайт: `http://IP`
-- API health: `http://IP/up`
-- Логин: `admin@example.com` / `password` (смените!)
-- Админка (Blade): `http://IP/admin/login`
-
-```bash
-docker compose -f docker-compose.prod.yml ps
-docker compose -f docker-compose.prod.yml logs -f --tail=100
+ssh-keygen -t ed25519 -C "deploy@tasksbase" -f ~/.ssh/id_ed25519 -N ""
+cat ~/.ssh/id_ed25519.pub
+# Добавить ключ в GitHub → Settings → Deploy keys (read-only)
 ```
 
 ---
 
-## Эксплуатация
+## Шаг 3. Первый деплой
 
-### Краткое обновление кода
-
-```bash
-git fetch --tags --prune
-git checkout master && git pull --ff-only      # или конкретный тег: git checkout vX.Y.Z
-docker compose -f docker-compose.prod.yml up -d --build
-docker compose -f docker-compose.prod.yml exec app php artisan migrate --force
-docker compose -f docker-compose.prod.yml exec app php artisan config:cache
-```
-
-> Полный процесс релиза (ветки, теги, откат, CI) — в разделе **«Релиз через Git»** ниже.
-
-### Перезапуск
+### 3.1 Клонировать репозиторий
 
 ```bash
-docker compose -f docker-compose.prod.yml restart app worker reverb nginx
-```
-
-### Бэкап БД
-
-```bash
-docker compose -f docker-compose.prod.yml exec -T postgres \
-  pg_dump -U postgres tasksbase_knowledgebase > backup_$(date +%F).sql
-```
-
-### Файлы пользователей
-
-Загрузки хранятся в named-volume `storage_data` (в контейнере `/var/www/html/storage`). Бэкап тома:
-```bash
-docker run --rm -v tasksbase-knowledgebase_storage_data:/data -v $PWD:/backup alpine \
-  tar czf /backup/storage_$(date +%F).tgz -C /data .
-```
-
----
-
-## Релиз через Git
-
-### Ветки и версии
-
-- `master` — стабильная ветка, **совпадает с продом**.
-- `feature/*`, `fix/*`, `hotfix/*` — рабочие ветки, вливаются в `master` через Pull Request.
-- Релиз помечается тегом `vMAJOR.MINOR.PATCH` (например `v1.0.0`, `v1.0.1`, `v1.1.0`).
-- Тег — неизменяемый срез кода для прода. Откат = `git checkout` предыдущего тега.
-
-### Первый деплой сервера (клонирование)
-
-```bash
-sudo mkdir -p /opt/tasksbase && sudo chown $USER /opt/tasksbase
-git clone https://github.com/Sereban4o/Tasksbase-Knowledgebase.git /opt/tasksbase
+git clone git@github.com:Sereban4o/Tasksbase-Knowledgebase.git /opt/tasksbase
 cd /opt/tasksbase
-git checkout master           # или нужный тег: git checkout v1.0.0
+git checkout master        # или нужный тег: git checkout v1.0.0
+```
 
+### 3.2 Создать прод-окружение
+
+```bash
 cp backend/.env.production.example backend/.env.production
-# заполнить секреты (см. «Подготовка и запуск»)
+```
 
+Сгенерировать `APP_KEY`:
+
+```bash
+php -r "echo 'base64:'.base64_encode(random_bytes(32)).PHP_EOL;"
+```
+
+Отредактировать `backend/.env.production`:
+- `APP_KEY=base64:...`
+- заменить `CHANGE_ME_*`: `POSTGRES_PASSWORD`, `DB_PASSWORD` (должны совпадать), `REVERB_APP_SECRET`, `MEILI_MASTER_KEY`
+- `APP_URL`, `SANCTUM_STATEFUL_DOMAINS`, `CORS_ALLOWED_ORIGINS` — уже указывают на `212.109.16.56`
+
+> `backend/.env.production` в git **не хранится** (в `.gitignore`). Создаётся один раз; `git pull`/`git checkout` его не перезаписывают.
+
+### 3.3 Собрать и запустить
+
+```bash
 docker compose -f docker-compose.prod.yml up -d --build
+```
+
+### 3.4 Инициализировать БД
+
+```bash
 docker compose -f docker-compose.prod.yml exec app php artisan migrate --force
 docker compose -f docker-compose.prod.yml exec app php artisan db:seed --force   # опционально
 ```
 
-> `backend/.env.production` в git **не хранится** (в `.gitignore`). Создаётся один раз на сервере; `git pull` / `git checkout` его **не перезаписывают**.
+> `--seed` создаёт демо-данные (пользователи, доска). Демо-админ `admin@example.com` / `password` — **смените пароль**.
 
-### Выпуск релиза (локально / CI)
-
-```bash
-git checkout master
-git pull --ff-only
-git merge --no-ff feature/xyz
-
-# прогон тестов и сборки перед тегом
-(cd backend && php artisan test)
-(cd frontend && npm run build)
-
-git tag -a v1.0.0 -m "Release v1.0.0"
-git push origin master
-git push origin v1.0.0        # отправить тег (git push origin --tags — все теги)
-```
-
-### Деплой тега на сервере
+### 3.5 Проверить
 
 ```bash
-cd /opt/tasksbase
-git fetch --tags --prune
-git checkout v1.0.0
-
-# пересборка образов (SPA собирается внутри nginx-образа)
-docker compose -f docker-compose.prod.yml build --pull
-docker compose -f docker-compose.prod.yml up -d
-
-# миграции + кэш
-docker compose -f docker-compose.prod.yml exec app php artisan migrate --force
-docker compose -f docker-compose.prod.yml exec app php artisan config:cache
-docker compose -f docker-compose.prod.yml exec app php artisan route:cache
-docker compose -f docker-compose.prod.yml exec app php artisan view:cache
-
-# проверка
 curl -fsS http://localhost/up && echo OK
 docker compose -f docker-compose.prod.yml ps
 ```
 
-`git checkout <тег>` переводит репозиторий в detached HEAD — для прода это нормально. Вернуться на ветку: `git checkout master`.
+- Сайт: `http://212.109.16.56`
+- Админка: `http://212.109.16.56/admin/login`
 
-Узнать развёрнутую версию:
+---
+
+## Шаг 4. Разработка фичи (ветки)
+
+### 4.1 Создать ветку от `master`
 
 ```bash
-git describe --tags --always
+git checkout master
+git pull --ff-only
+git checkout -b feature/short-name
 ```
 
-### Откат (rollback)
+### 4.2 Работа и локальные проверки
+
+```bash
+(cd backend && php artisan test)
+(cd frontend && npm run build)
+```
+
+### 4.3 Коммит и пуш ветки
+
+```bash
+git add -A
+git commit -m "feat: describe change"
+git push -u origin feature/short-name
+```
+
+### 4.4 Pull Request → merge в `master`
+
+- Открыть PR в GitHub, дождаться ревью/CI, влить в `master`.
+
+---
+
+## Шаг 5. Подготовка релиза (локально/CI)
+
+> `master` = прод. Тег = неизменяемый срез для деплоя.
+
+### 5.1 Обновить `master`
+
+```bash
+git checkout master
+git pull --ff-only
+```
+
+### 5.2 Прогнать тесты и сборку
+
+```bash
+(cd backend && php artisan test)
+(cd frontend && npm run build)
+```
+
+### 5.3 Поставить тег версии (SemVer)
+
+```bash
+git tag -a v1.0.0 -m "Release v1.0.0"
+```
+
+Типы версий: `v1.0.1` — фиксы, `v1.1.0` — фичи (обратно совместимо), `v2.0.0` — breaking changes.
+
+### 5.4 Отправить ветку и тег
+
+```bash
+git push origin master
+git push origin v1.0.0        # или все теги: git push origin --tags
+```
+
+---
+
+## Шаг 6. Деплой релиза на сервере (по порядку)
+
+### 6.1 Перейти в каталог и подтянуть теги
+
+```bash
+cd /opt/tasksbase
+git fetch --tags --prune
+```
+
+### 6.2 Переключиться на релизный тег
+
+```bash
+git checkout v1.0.0
+git describe --tags --always      # проверить развёртываемую версию
+```
+
+> `git checkout <тег>` → detached HEAD. Это нормально для прода. Возврат на ветку: `git checkout master`.
+
+### 6.3 Пересобрать образы
+
+```bash
+docker compose -f docker-compose.prod.yml build --pull
+docker compose -f docker-compose.prod.yml up -d
+```
+
+> SPA собирается внутри `nginx`-образа. Изменения фронтенда подхватываются только пересборкой. `REVERB_APP_KEY` вшивается в бандл на этапе сборки.
+
+### 6.4 Применить миграции
+
+```bash
+docker compose -f docker-compose.prod.yml exec app php artisan migrate --force
+```
+
+### 6.5 Обновить кэш
+
+```bash
+docker compose -f docker-compose.prod.yml exec app php artisan config:cache
+docker compose -f docker-compose.prod.yml exec app php artisan route:cache
+docker compose -f docker-compose.prod.yml exec app php artisan view:cache
+```
+
+> Если меняли `backend/.env.production`: сначала `php artisan config:clear`, затем `config:cache` и `up -d --force-recreate app worker reverb`.
+
+### 6.6 Проверить релиз (Шаг 7 ниже)
+
+---
+
+## Шаг 7. Проверка после деплоя
+
+```bash
+curl -fsS http://localhost/up && echo OK
+docker compose -f docker-compose.prod.yml ps
+docker compose -f docker-compose.prod.yml logs -f --tail=100
+```
+
+Чек-лист:
+- [ ] `http://212.109.16.56` открывает SPA
+- [ ] Логин работает (`/api/v1/auth/login`)
+- [ ] WebSocket подключается (`ws://212.109.16.56/app/...`)
+- [ ] Загрузка файлов/вложений работает
+- [ ] `docker compose ... ps` — все сервисы `Up`
+
+---
+
+## Шаг 8. Откат (rollback)
+
+### 8.1 Переключиться на предыдущий стабильный тег
 
 ```bash
 cd /opt/tasksbase
 git fetch --tags
-git checkout v1.0.0           # предыдущий стабильный тег
+git checkout v0.9.0               # предыдущий рабочий тег
 docker compose -f docker-compose.prod.yml up -d --build
 docker compose -f docker-compose.prod.yml exec app php artisan config:clear
 docker compose -f docker-compose.prod.yml exec app php artisan config:cache
 ```
 
-> Откат кода **не откатывает миграции**. Если релиз содержал миграции — либо `php artisan migrate:rollback` (только если `down()` реализован), либо восстановление БД из бэкапа (см. «Бэкап БД»). Предпочтительнее «forward-fix» новым тегом.
+### 8.2 Про миграции
 
-### Hotfix
+Откат кода **не откатывает миграции**. Варианты:
+- `php artisan migrate:rollback` — только если у миграций есть рабочий `down()`;
+- восстановление БД из бэкапа (см. Шаг 11.3);
+- предпочтительно — «forward-fix» новым тегом.
+
+---
+
+## Шаг 9. Hotfix
 
 ```bash
 git checkout -b hotfix/critical-bug master
 # ... правки + тесты ...
-git commit -am "Fix critical bug"
-git checkout master && git merge --no-ff hotfix/critical-bug
+git commit -am "fix: critical bug"
+git checkout master
+git merge --no-ff hotfix/critical-bug
 git tag -a v1.0.1 -m "Hotfix v1.0.1"
 git push origin master v1.0.1
 ```
 
-Затем на сервере — «Деплой тега» с `v1.0.1`.
+На сервере — повторить **Шаг 6** с тегом `v1.0.1`.
 
-### Доступ к репозиторию на сервере
+---
 
-- Используйте **deploy key** (SSH, read-only) или токен только на чтение.
-- Приватный репо по SSH:
+## Шаг 10. CI/CD (опционально, GitHub Actions)
 
-```bash
-ssh-keygen -t ed25519 -C "deploy@tasksbase" -f ~/.ssh/id_ed25519 -N ""
-cat ~/.ssh/id_ed25519.pub          # добавить в GitHub → Settings → Deploy keys (read-only)
-git remote set-url origin git@github.com:Sereban4o/Tasksbase-Knowledgebase.git
-```
-
-### CI/CD (опционально, GitHub Actions)
-
-На пуш тега `v*` — прогон тестов и деплой по SSH. Пример `.github/workflows/deploy.yml`:
+На пуш тега `v*` — тесты и деплой по SSH. `.github/workflows/deploy.yml`:
 
 ```yaml
 name: Deploy
@@ -305,27 +319,80 @@ jobs:
             docker compose -f docker-compose.prod.yml exec app php artisan config:cache
 ```
 
-Секреты `DEPLOY_HOST`, `DEPLOY_USER`, `DEPLOY_SSH_KEY` задайте в настройках репозитория (Settings → Secrets and variables → Actions).
-
-> SPA собирается внутри `nginx`-образа, поэтому после `git checkout` обязательно пересобирайте `nginx` (`up -d --build`). Ключ `REVERB_APP_KEY` попадает в клиентский бандл на этапе сборки.
+Секреты `DEPLOY_HOST`, `DEPLOY_USER`, `DEPLOY_SSH_KEY` — в Settings → Secrets and variables → Actions.
 
 ---
 
-## Добавление HTTPS позже
+## Шаг 11. Эксплуатация
 
-1. Получите домен, направьте A-запись на `IP` (или выпустите сертификат на IP через certbot/acme).
-2. Смонтируйте сертификаты в nginx и добавьте `listen 443 ssl;` + блок `ssl_certificate`.
+### 11.1 Перезапуск сервисов
+
+```bash
+docker compose -f docker-compose.prod.yml restart app worker reverb nginx
+```
+
+### 11.2 Логи
+
+```bash
+docker compose -f docker-compose.prod.yml logs -f --tail=200 app
+docker compose -f docker-compose.prod.yml logs -f --tail=200 nginx
+```
+
+### 11.3 Бэкап БД
+
+```bash
+docker compose -f docker-compose.prod.yml exec -T postgres \
+  pg_dump -U postgres tasksbase_knowledgebase > backup_$(date +%F).sql
+```
+
+### 11.4 Бэкап файлов пользователей
+
+Загрузки — named-volume `storage_data` (в контейнере `/var/www/html/storage`):
+
+```bash
+docker run --rm -v tasksbase-knowledgebase_storage_data:/data -v $PWD:/backup alpine \
+  tar czf /backup/storage_$(date +%F).tgz -C /data .
+```
+
+---
+
+## Шаг 12. Добавить HTTPS позже
+
+1. Получить домен, A-запись → `212.109.16.56` (или сертификат на IP через acme/certbot).
+2. Смонтировать сертификаты в nginx, добавить `listen 443 ssl;` + `ssl_certificate`.
 3. В `backend/.env.production`: `APP_URL=https://домен`, `SESSION_SECURE_COOKIE=true`, `SANCTUM_STATEFUL_DOMAINS=домен`, `CORS_ALLOWED_ORIGINS=https://домен`.
-4. Откройте 443 и пересоберите nginx. WebSocket автоматически станет `wss` (клиент выбирает схему по `window.location.protocol`).
+4. Открыть 443, пересобрать nginx (Шаг 6). WebSocket станет `wss` автоматически (клиент выбирает схему по `window.location.protocol`).
 
 ---
 
-## Безопасность — чек-лист
+## Шаг 13. Безопасность — чек-лист
 
 - [ ] Сменён пароль `admin@example.com`
 - [ ] Заданы сильные `POSTGRES_PASSWORD`/`DB_PASSWORD`, `REVERB_APP_SECRET`, `MEILI_MASTER_KEY`
 - [ ] `APP_DEBUG=false`, `APP_ENV=production`
 - [ ] Наружу открыты только 22/80 (443 позже); БД, Redis, Meilisearch, Reverb **не** опубликованы
-- [ ] SSH ограничен по IP (по возможности)
 - [ ] `.env` / `.env.production` не в git (только `*.example`), доступ к репо — deploy key (read-only)
+- [ ] SSH ограничен по IP (по возможности)
 - [ ] Настроен регулярный бэкап БД и `storage_data`
+
+---
+
+## Быстрая шпаргалка
+
+**Релиз (локально):**
+```bash
+git checkout master && git pull --ff-only
+(cd backend && php artisan test) && (cd frontend && npm run build)
+git tag -a vX.Y.Z -m "Release vX.Y.Z"
+git push origin master vX.Y.Z
+```
+
+**Деплой (сервер):**
+```bash
+cd /opt/tasksbase && git fetch --tags --prune && git checkout vX.Y.Z
+docker compose -f docker-compose.prod.yml up -d --build
+docker compose -f docker-compose.prod.yml exec app php artisan migrate --force
+docker compose -f docker-compose.prod.yml exec app php artisan config:cache
+docker compose -f docker-compose.prod.yml exec app php artisan route:cache
+curl -fsS http://localhost/up && echo OK
+```

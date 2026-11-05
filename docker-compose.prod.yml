@@ -1,0 +1,158 @@
+# Production stack for Tasksbase-Knowledgebase
+#
+#   External IP : 212.109.16.56   (public)
+#   Internal IP : 192.168.0.5     (Ubuntu + Docker host)
+#
+# Only nginx (port 80) is published. PostgreSQL / Redis / Meilisearch / Reverb
+# stay on the internal Docker network and are NOT reachable from the internet.
+#
+# Usage:
+#   cp backend/.env.production.example backend/.env.production   # then edit
+#   docker compose -f docker-compose.prod.yml up -d --build
+#   docker compose -f docker-compose.prod.yml exec app php artisan migrate --force --seed
+
+services:
+  app:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.prod
+    env_file:
+      - ./backend/.env.production
+    volumes:
+      - storage_data:/var/www/html/storage
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    command: php-fpm
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "php -r 'exit(@fsockopen(\"127.0.0.1\", 9000) ? 0 : 1);'"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.prod
+    env_file:
+      - ./backend/.env.production
+    volumes:
+      - storage_data:/var/www/html/storage
+    command: php artisan queue:work --sleep=3 --tries=3 --max-time=3600
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      reverb:
+        condition: service_started
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  reverb:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.prod
+    env_file:
+      - ./backend/.env.production
+    volumes:
+      - storage_data:/var/www/html/storage
+    command: php artisan reverb:start --host=0.0.0.0 --port=8080
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    expose:
+      - "8080"
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  nginx:
+    build:
+      context: .
+      dockerfile: nginx/Dockerfile
+      args:
+        VITE_REVERB_KEY: ${REVERB_APP_KEY:-chat-key}
+    ports:
+      - "80:80"
+      # - "443:443"   # enable together with TLS certs
+    depends_on:
+      - app
+      - reverb
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  postgres:
+    image: postgres:18-alpine
+    env_file:
+      - ./backend/.env.production
+    volumes:
+      - pgdata:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  redis:
+    image: redis:7-alpine
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  meilisearch:
+    image: getmeili/meilisearch:latest
+    env_file:
+      - ./backend/.env.production
+    volumes:
+      - meilisearchdata:/meili_data
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  pgdata:
+  redisdata:
+  meilisearchdata:
+  storage_data:

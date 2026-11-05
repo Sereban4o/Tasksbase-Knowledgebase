@@ -1,0 +1,197 @@
+
+services:
+  app:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: tasksbase-knowledgebase-app
+    volumes:
+      - ./backend:/var/www/html
+      - ./backend/docker/opcache.ini:/usr/local/etc/php/conf.d/zz-opcache.ini
+    dns:
+      - 8.8.8.8
+      - 8.8.4.4
+    environment:
+      - APP_ENV=local
+      - APP_DEBUG=true
+      - DB_CONNECTION=pgsql
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_DATABASE=tasksbase_knowledgebase
+      - DB_USERNAME=postgres
+      - DB_PASSWORD=secret
+      - REDIS_HOST=redis
+      - BROADCAST_DRIVER=reverb
+      - REVERB_APP_ID=chat-app
+      - REVERB_APP_KEY=chat-key
+      - REVERB_APP_SECRET=chat-secret
+      - REVERB_HOST=localhost
+      - REVERB_PORT=8080
+      - REVERB_SCHEME=http
+      - CACHE_STORE=redis
+      - CACHE_DRIVER=redis
+      - QUEUE_CONNECTION=redis
+      - SESSION_DRIVER=redis
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    command: php-fpm
+    healthcheck:
+      test: ["CMD-SHELL", "php -r 'exit(@fsockopen(\"127.0.0.1\", 9000) ? 0 : 1);'"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  nginx:
+    image: nginx:alpine
+    container_name: tasksbase-knowledgebase-nginx
+    ports:
+      - "80:80"
+      - "443:443"
+      - "8000:80"
+    volumes:
+      - ./backend:/var/www/html
+      - ./nginx/conf.d:/etc/nginx/conf.d
+    depends_on:
+      - app
+
+  postgres:
+    image: postgres:18-alpine
+    container_name: tasksbase-knowledgebase-postgres
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_DB=tasksbase_knowledgebase
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=secret
+    volumes:
+      - pgdata:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: tasksbase-knowledgebase-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  reverb:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: tasksbase-knowledgebase-reverb
+    volumes:
+      - ./backend:/var/www/html
+      - ./backend/docker/opcache.ini:/usr/local/etc/php/conf.d/zz-opcache.ini
+    dns:
+      - 8.8.8.8
+      - 8.8.4.4
+    environment:
+      - APP_ENV=local
+      - APP_DEBUG=true
+      - DB_CONNECTION=pgsql
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_DATABASE=tasksbase_knowledgebase
+      - DB_USERNAME=postgres
+      - DB_PASSWORD=secret
+      - REDIS_HOST=redis
+      - BROADCAST_DRIVER=reverb
+      - REVERB_APP_ID=chat-app
+      - REVERB_APP_KEY=chat-key
+      - REVERB_APP_SECRET=chat-secret
+      - REVERB_HOST=localhost
+      - REVERB_PORT=8080
+      - REVERB_SCHEME=http
+      - CACHE_STORE=redis
+      - CACHE_DRIVER=redis
+    depends_on:
+      - postgres
+      - redis
+    ports:
+      - "8080:8080"
+    command: php /var/www/html/artisan reverb:start
+
+  worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: tasksbase-knowledgebase-worker
+    volumes:
+      - ./backend:/var/www/html
+      - ./backend/docker/opcache.ini:/usr/local/etc/php/conf.d/zz-opcache.ini
+    dns:
+      - 8.8.8.8
+      - 8.8.4.4
+    environment:
+      - APP_ENV=local
+      - APP_DEBUG=true
+      - DB_CONNECTION=pgsql
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_DATABASE=tasksbase_knowledgebase
+      - DB_USERNAME=postgres
+      - DB_PASSWORD=secret
+      - REDIS_HOST=redis
+      - BROADCAST_DRIVER=reverb
+      - REVERB_APP_ID=chat-app
+      - REVERB_APP_KEY=chat-key
+      - REVERB_APP_SECRET=chat-secret
+      - REVERB_HOST=localhost
+      - REVERB_PORT=8080
+      - REVERB_SCHEME=http
+      - CACHE_STORE=file
+      - CACHE_DRIVER=redis
+      - QUEUE_CONNECTION=redis
+    command: php /var/www/html/artisan queue:work --sleep=3 --tries=3
+    depends_on:
+      - postgres
+      - redis
+      - reverb
+
+  meilisearch:
+    image: getmeili/meilisearch:latest
+    container_name: tasksbase-knowledgebase-meilisearch
+    ports:
+      - "7700:7700"
+    environment:
+      - MEILI_MASTER_KEY=secret
+      - MEILI_NO_ANALYTICS=true
+    volumes:
+      - meilisearchdata:/meili_data
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: tasksbase-knowledgebase-frontend
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./frontend/src:/app/src
+      - ./frontend/vite.config.ts:/app/vite.config.ts
+    environment:
+      - VITE_REVERB_KEY=chat-key
+      - VITE_REVERB_HOST=localhost
+      - VITE_REVERB_PORT=8080
+      - VITE_REVERB_SCHEME=http
+    depends_on:
+      - app
+
+volumes:
+  pgdata:
+  redisdata:
+  meilisearchdata:

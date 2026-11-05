@@ -1,0 +1,7 @@
+<resources>
+    <style name="Theme.TasksbaseChat" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:statusBarColor">#3390EC</item>
+        <item name="android:navigationBarColor">#FFFFFF</item>
+        <item name="android:windowBackground">#FFFFFF</item>
+    </style>
+</resources>

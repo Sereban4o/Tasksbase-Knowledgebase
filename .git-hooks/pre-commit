@@ -1,0 +1,47 @@
+#!/bin/bash
+
+echo "🚀 Running pre-commit hooks..."
+echo ""
+
+# Frontend: Lint and Format
+if [ -d "frontend" ]; then
+    echo "📦 Checking frontend..."
+    
+    # Run Prettier check
+    if [ -f "frontend/node_modules/.bin/prettier" ]; then
+        if ! npx --prefix frontend prettier --check "src/**/*.{ts,tsx,css,scss}" 2>/dev/null; then
+            echo "❌ Prettier check failed!"
+            echo "   Fix with: npm run format"
+            exit 1
+        fi
+        echo "   ✅ Prettier check passed"
+    fi
+    
+    # Run ESLint
+    if [ -f "frontend/node_modules/.bin/eslint" ]; then
+        if ! npx --prefix frontend eslint --ext ts,tsx src/ --max-warnings 0 2>/dev/null; then
+            echo "❌ ESLint check failed!"
+            echo "   Fix with: npm run lint:fix"
+            exit 1
+        fi
+        echo "   ✅ ESLint check passed"
+    fi
+fi
+
+# Backend: Laravel Pint
+if [ -d "backend" ]; then
+    echo "🔧 Checking backend..."
+    
+    if [ -f "backend/vendor/bin/pint" ]; then
+        if ! php backend/vendor/bin/pint --test; then
+            echo "❌ Laravel Pint check failed!"
+            echo "   Fix with: php vendor/bin/pint"
+            exit 1
+        fi
+        echo "   ✅ Laravel Pint check passed"
+    fi
+fi
+
+echo ""
+echo "✅ All checks passed! Ready to commit."
+echo ""

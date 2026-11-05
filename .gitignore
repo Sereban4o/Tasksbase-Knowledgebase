@@ -1,0 +1,105 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Dependencies
+# ─────────────────────────────────────────────────────────────────────────────
+node_modules/
+frontend/node_modules/
+backend/vendor/
+vendor/
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Environment / secrets
+# ─────────────────────────────────────────────────────────────────────────────
+.env
+.env.*
+!.env.example
+!.env.production.example
+backend/.env
+backend/.env.*
+!backend/.env.example
+!backend/.env.production.example
+frontend/.env
+frontend/.env.*
+!frontend/.env.example
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Build artifacts
+# ─────────────────────────────────────────────────────────────────────────────
+dist/
+build/
+*.apk
+*.aab
+backend/public/build/
+backend/public/hot/
+backend/public/storage
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Laravel runtime / storage
+# ─────────────────────────────────────────────────────────────────────────────
+backend/bootstrap/cache/*
+!backend/bootstrap/cache/.gitignore
+backend/storage/*.key
+backend/storage/logs/*
+!backend/storage/logs/.gitkeep
+backend/storage/framework/cache/data/*
+!backend/storage/framework/cache/data/.gitkeep
+backend/storage/framework/sessions/*
+!backend/storage/framework/sessions/.gitkeep
+backend/storage/framework/testing/*
+!backend/storage/framework/testing/.gitkeep
+backend/storage/framework/views/*
+!backend/storage/framework/views/.gitkeep
+backend/storage/app/*
+!backend/storage/app/.gitkeep
+!backend/storage/app/public/
+backend/storage/app/public/*
+!backend/storage/app/public/.gitkeep
+.phpunit.result.cache
+*.log
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Testing / coverage
+# ─────────────────────────────────────────────────────────────────────────────
+coverage/
+backend/.phpunit.result.cache
+
+# ─────────────────────────────────────────────────────────────────────────────
+# IDE / OS
+# ─────────────────────────────────────────────────────────────────────────────
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Android / Gradle
+# ─────────────────────────────────────────────────────────────────────────────
+android/.gradle/
+android/build/
+android/app/build/
+android/local.properties
+android/captures/
+android/.externalNativeBuild/
+android/.cxx/
+*.iml
+
+# ─────────────────────────────────────────────────────────────────────────────
+# AI / tooling artifacts
+# ─────────────────────────────────────────────────────────────────────────────
+.gigacode/
+.gigaide/
+.vite/
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Lockfiles: ignore root ones, keep the project ones
+# ─────────────────────────────────────────────────────────────────────────────
+composer.lock
+!backend/composer.lock
+package-lock.json
+!frontend/package-lock.json
+yarn.lock
+*.tmp
+*.pid
+*.seed

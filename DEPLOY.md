@@ -1,8 +1,8 @@
 # Релиз и деплой через Git — по порядку действий
 
 > **Параметры деплоя**
-> - Внешний IP (публичный): **212.109.16.56**
-> - Внутренний IP сервера (Ubuntu + Docker): **192.168.0.5**
+> - Внешний IP (публичный)
+> - Внутренний IP сервера (Ubuntu + Docker)
 > - Репозиторий: `https://github.com/Sereban4o/Tasksbase-Knowledgebase`
 > - Каталог проекта на сервере: `/opt/tasksbase`
 > - Доступ: HTTP по IP, HTTPS пока нет. WebSocket идёт через nginx (`ws://`), при включении TLS станет `wss://`.
@@ -14,7 +14,7 @@
 
 ## Шаг 1. Открыть порты
 
-### 1.1 Публичные (firewall + NAT роутера → 192.168.0.5)
+### 1.1 Публичные (firewall + NAT роутера → Внутренний IP)
 
 | Порт | Назначение | Обязательность |
 |------|-----------|----------------|
@@ -37,7 +37,7 @@ sudo ufw enable
 sudo ufw status
 ```
 
-> Если сервер за NAT-роутером: пробросьте на `192.168.0.5` только **80** (и **22** для SSH).
+> Если сервер за NAT-роутером: пробросьте на `Внутренний IP` только **80** (и **22** для SSH).
 
 ---
 
@@ -93,7 +93,7 @@ php -r "echo 'base64:'.base64_encode(random_bytes(32)).PHP_EOL;"
 Отредактировать `backend/.env.production`:
 - `APP_KEY=base64:...`
 - заменить `CHANGE_ME_*`: `POSTGRES_PASSWORD`, `DB_PASSWORD` (должны совпадать), `REVERB_APP_SECRET`, `MEILI_MASTER_KEY`
-- `APP_URL`, `SANCTUM_STATEFUL_DOMAINS`, `CORS_ALLOWED_ORIGINS` — уже указывают на `212.109.16.56`
+- `APP_URL`, `SANCTUM_STATEFUL_DOMAINS`, `CORS_ALLOWED_ORIGINS` — уже указывают на `Внешний IP`
 
 > `backend/.env.production` в git **не хранится** (в `.gitignore`). Создаётся один раз; `git pull`/`git checkout` его не перезаписывают.
 
@@ -119,8 +119,8 @@ curl -fsS http://localhost/up && echo OK
 docker compose -f docker-compose.prod.yml ps
 ```
 
-- Сайт: `http://212.109.16.56`
-- Админка: `http://212.109.16.56/admin/login`
+- Сайт: `http://Внешний IP`
+- Админка: `http://Внешний IP/admin/login`
 
 ---
 
@@ -246,9 +246,9 @@ docker compose -f docker-compose.prod.yml logs -f --tail=100
 ```
 
 Чек-лист:
-- [ ] `http://212.109.16.56` открывает SPA
+- [ ] `http://Внешний IP` открывает SPA
 - [ ] Логин работает (`/api/v1/auth/login`)
-- [ ] WebSocket подключается (`ws://212.109.16.56/app/...`)
+- [ ] WebSocket подключается (`ws://Внешний IP/app/...`)
 - [ ] Загрузка файлов/вложений работает
 - [ ] `docker compose ... ps` — все сервисы `Up`
 
@@ -358,7 +358,7 @@ docker run --rm -v tasksbase-knowledgebase_storage_data:/data -v $PWD:/backup al
 
 ## Шаг 12. Добавить HTTPS позже
 
-1. Получить домен, A-запись → `212.109.16.56` (или сертификат на IP через acme/certbot).
+1. Получить домен, A-запись → `Внешний IP` (или сертификат на IP через acme/certbot).
 2. Смонтировать сертификаты в nginx, добавить `listen 443 ssl;` + `ssl_certificate`.
 3. В `backend/.env.production`: `APP_URL=https://домен`, `SESSION_SECURE_COOKIE=true`, `SANCTUM_STATEFUL_DOMAINS=домен`, `CORS_ALLOWED_ORIGINS=https://домен`.
 4. Открыть 443, пересобрать nginx (Шаг 6). WebSocket станет `wss` автоматически (клиент выбирает схему по `window.location.protocol`).

@@ -146,7 +146,7 @@ class DashboardController extends Controller
         $search = $request->get('search', '');
         $categoryFilter = $request->get('category', '');
 
-        $query = IssueStatus::orderBy('name');
+        $query = IssueStatus::orderBy('sort_order')->orderBy('id');
 
         if ($search) {
             $query->where('name', 'like', "%{$search}%");
@@ -174,9 +174,11 @@ class DashboardController extends Controller
             'category' => 'nullable|string|max:100',
             'color' => 'required|string|regex:/^#[0-9A-F]{6}$/i',
             'is_used' => 'boolean',
+            'sort_order' => 'nullable|integer|min:0',
         ]);
 
         $validated['is_used'] = $request->has('is_used');
+        $validated['sort_order'] = $validated['sort_order'] ?? 0;
         IssueStatus::create($validated);
 
         return redirect()->route('admin.statuses.index')->with('success', 'Статус успешно создан');
@@ -194,9 +196,11 @@ class DashboardController extends Controller
             'category' => 'nullable|string|max:100',
             'color' => 'required|string|regex:/^#[0-9A-F]{6}$/i',
             'is_used' => 'boolean',
+            'sort_order' => 'nullable|integer|min:0',
         ]);
 
         $validated['is_used'] = $request->has('is_used');
+        $validated['sort_order'] = $validated['sort_order'] ?? 0;
         $status->update($validated);
 
         return redirect()->route('admin.statuses.index')->with('success', 'Статус успешно обновлен');

@@ -59,6 +59,10 @@ class BoardController extends Controller
             return response()->json(['message' => 'Permission denied'], 403);
         }
 
+        $board->setRelation('columns', $board->columns->sortBy(function ($column) {
+            return sprintf('%010d-%010d', $column->status?->sort_order ?? 999999999, $column->order ?? 0);
+        })->values());
+
         return response()->json($board);
     }
 
@@ -99,10 +103,15 @@ class BoardController extends Controller
             return response()->json(['message' => 'Permission denied'], 403);
         }
 
-        $columns = BoardColumn::where('board_id', $boardId)
+        $columns = BoardColumn::where('board_columns.board_id', $boardId)
+            ->leftJoin('issue_statuses', 'issue_statuses.id', '=', 'board_columns.status_id')
+            ->orderByRaw('issue_statuses.sort_order IS NULL')
+            ->orderBy('issue_statuses.sort_order')
+            ->orderBy('board_columns.order')
+            ->select('board_columns.*')
             ->with('status')
-            ->orderBy('order')
             ->get();
+
         return response()->json($columns);
     }
 

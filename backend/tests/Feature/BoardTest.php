@@ -136,4 +136,22 @@ class BoardTest extends TestCase
 
         $this->assertDatabaseMissing('boards', ['id' => $board->id]);
     }
+
+    public function test_board_columns_follow_status_sort_order(): void
+    {
+        $board = $this->makeBoard();
+
+        $late = IssueStatus::create(['name' => 'Late', 'category' => 'todo', 'color' => '#000000', 'sort_order' => 20]);
+        $early = IssueStatus::create(['name' => 'Early', 'category' => 'todo', 'color' => '#111111', 'sort_order' => 10]);
+
+        BoardColumn::create(['board_id' => $board->id, 'name' => 'Late col', 'status_id' => $late->id, 'order' => 0]);
+        BoardColumn::create(['board_id' => $board->id, 'name' => 'Early col', 'status_id' => $early->id, 'order' => 1]);
+
+        $response = $this->withToken($this->token)
+            ->getJson("/api/v1/tasksbase/boards/{$board->id}/columns");
+
+        $response->assertStatus(200)->assertJsonCount(2);
+        $response->assertJsonPath('0.name', 'Early col');
+        $response->assertJsonPath('1.name', 'Late col');
+    }
 }

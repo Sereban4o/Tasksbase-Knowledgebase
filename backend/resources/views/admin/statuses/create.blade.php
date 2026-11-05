@@ -25,6 +25,12 @@
         </div>
         
         <div class="form-group">
+            <label>Порядок</label>
+            <input type="number" name="sort_order" value="{{ old('sort_order', 0) }}" min="0" step="1" placeholder="0">
+            <small style="color: #6B778C;">Меньше — левее на доске</small>
+        </div>
+
+        <div class="form-group">
             <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
                 <input type="checkbox" name="is_used" value="1" {{ old('is_used') ? 'checked' : '' }} style="width: auto;">
                 Используется в задачах

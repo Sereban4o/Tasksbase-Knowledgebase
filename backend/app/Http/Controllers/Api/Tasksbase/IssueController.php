@@ -125,7 +125,7 @@ class IssueController extends Controller
                 'issue_type_id' => $validated['issue_type_id']
                     ?? IssueType::query()->orderBy('id')->value('id'),
                 'status_id' => $validated['status_id']
-                    ?? IssueStatus::query()->orderBy('id')->value('id'),
+                    ?? IssueStatus::query()->orderBy('sort_order')->orderBy('id')->value('id'),
                 'created_by' => Auth::id(),
                 'assigned_to' => $validated['assignee_id'] ?? null,
                 'reporter_id' => Auth::id(),

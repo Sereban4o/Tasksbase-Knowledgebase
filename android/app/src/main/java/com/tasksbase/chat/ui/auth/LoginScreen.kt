@@ -173,7 +173,7 @@ private fun ServerSettingsDialog(
                 }
                 Spacer(Modifier.height(8.dp))
                 Text(
-                    "Например: 192.168.0.5 и 80. Без http:// и без пути.",
+                    "Например: Внутренний IP и 80. Без http:// и без пути.",
                     fontSize = 11.sp,
                     color = TgSecondary,
                 )

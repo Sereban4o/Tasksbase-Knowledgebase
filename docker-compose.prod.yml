@@ -1,7 +1,7 @@
 # Production stack for Tasksbase-Knowledgebase
 #
 #   External IP : <PUBLIC_IP>   (public)
-#   Internal IP : 192.168.0.5     (Ubuntu + Docker host)
+#   Internal IP : Внутренний IP   (Ubuntu + Docker host)
 #
 # Only nginx (port 80) is published. PostgreSQL / Redis / Meilisearch / Reverb
 # stay on the internal Docker network and are NOT reachable from the internet.

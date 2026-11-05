@@ -105,11 +105,15 @@ fun ChatScreen(chat: ChatDto, onBack: () -> Unit) {
     }
 
     DisposableEffect(chat.id) {
+        Session.activeChatId = chat.id
         val realtime = ServiceLocator.newRealtime()
         realtime.onMessageEvent = { refreshKey++ }
         realtime.connect()
         realtime.subscribe("private-chat.${chat.id}")
-        onDispose { realtime.close() }
+        onDispose {
+            Session.activeChatId = null
+            realtime.close()
+        }
     }
 
     Scaffold(

@@ -163,4 +163,26 @@ class SecurityTest extends TestCase
         $this->assertStringNotContainsString('onerror', (string) $page->body);
         $this->assertStringContainsString('ok', (string) $page->body);
     }
+
+    public function test_suspended_user_cannot_use_api(): void
+    {
+        $suspended = User::factory()->create(['status' => 'suspended']);
+        $token = $suspended->createToken('test-token')->plainTextToken;
+
+        $this->withToken($token)->getJson('/api/v1/auth/me')->assertStatus(403);
+        $this->withToken($token)->getJson('/api/v1/chat/my')->assertStatus(403);
+    }
+
+    public function test_suspended_user_cannot_authorize_broadcasting(): void
+    {
+        $suspended = User::factory()->create(['status' => 'suspended']);
+        $token = $suspended->createToken('test-token')->plainTextToken;
+
+        $this->withToken($token)
+            ->postJson('/broadcasting/auth', [
+                'channel_name' => 'private-user.' . $suspended->id,
+                'socket_id' => '1234.5678',
+            ])
+            ->assertStatus(403);
+    }
 }

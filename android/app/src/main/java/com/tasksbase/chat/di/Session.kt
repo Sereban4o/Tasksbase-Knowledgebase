@@ -10,8 +10,13 @@ object Session {
     @Volatile
     var currentUser: UserDto? = null
 
+    /** Chat currently opened in the UI; notifications are suppressed for it. */
+    @Volatile
+    var activeChatId: Int? = null
+
     fun reset() {
         token = null
         currentUser = null
+        activeChatId = null
     }
 }

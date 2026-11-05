@@ -46,8 +46,15 @@ class NtfyService
         try {
             $request = Http::timeout(3)->acceptJson()->asJson();
 
+            $user = config('ntfy.user');
+            $password = config('ntfy.password');
             $token = config('ntfy.token');
-            if (!empty($token)) {
+
+            if (!empty($user) && $password !== null && $password !== '') {
+                // Preferred: ntfy user/password (HTTP Basic).
+                $request = $request->withBasicAuth((string) $user, (string) $password);
+            } elseif (!empty($token)) {
+                // Optional: ntfy access token (Bearer).
                 $request = $request->withToken((string) $token);
             }
 

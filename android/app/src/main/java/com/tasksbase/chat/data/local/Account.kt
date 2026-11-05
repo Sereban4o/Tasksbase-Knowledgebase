@@ -21,6 +21,8 @@ data class Account(
     val ntfyHost: String,
     val ntfyPort: Int,
     val ntfyTopic: String,
+    val ntfyUser: String? = null,
+    val ntfyPass: String? = null,
     val token: String,
     val user: UserDto,
 ) {

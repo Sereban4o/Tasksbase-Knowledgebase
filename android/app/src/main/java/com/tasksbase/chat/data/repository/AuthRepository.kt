@@ -19,6 +19,8 @@ class AuthRepository(private val api: ApiService) {
         server: ServerConfig,
         ntfyHost: String,
         ntfyPort: Int,
+        ntfyUser: String? = null,
+        ntfyPass: String? = null,
     ): Account {
         val previousServer = ServiceLocator.server
         ServiceLocator.setLoginServer(server)
@@ -33,6 +35,8 @@ class AuthRepository(private val api: ApiService) {
                 ntfyHost = ntfyHost.trim(),
                 ntfyPort = ntfyPort,
                 ntfyTopic = "tasksbase-user-${response.user.id}",
+                ntfyUser = ntfyUser?.takeIf { it.isNotBlank() },
+                ntfyPass = ntfyPass?.takeIf { it.isNotBlank() },
                 token = response.token,
                 user = response.user,
             )

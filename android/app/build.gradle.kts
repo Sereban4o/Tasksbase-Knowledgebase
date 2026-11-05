@@ -14,15 +14,11 @@ android {
         versionCode = 1
         versionName = "1.0"
 
-        // ── Backend endpoints ───────────────────────────────────────────────
+        // ── Default server address ──────────────────────────────────────────
+        // Used until the user sets a server address/port inside the app.
         // 10.0.2.2 is the host machine as seen from the Android emulator.
-        // For a real device change these to your PC LAN IP, e.g. 192.168.1.10
-        // (nginx is published on host port 8000, Reverb on 8080).
         buildConfigField("String", "API_BASE_URL", "\"http://10.0.2.2:8000/api/v1/\"")
-        buildConfigField("String", "WS_HOST", "\"10.0.2.2\"")
-        buildConfigField("int", "WS_PORT", "8080")
         buildConfigField("String", "WS_KEY", "\"chat-key\"")
-        buildConfigField("String", "BROADCAST_AUTH_URL", "\"http://10.0.2.2:8000/broadcasting/auth\"")
     }
 
     buildTypes {
@@ -69,6 +65,9 @@ dependencies {
     implementation("androidx.compose.material3:material3")
     implementation("androidx.compose.material:material-icons-extended")
     debugImplementation("androidx.compose.ui:ui-tooling")
+
+    implementation("io.coil-kt:coil-compose:2.7.0")
+    implementation("io.coil-kt:coil-gif:2.7.0")
 
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
 

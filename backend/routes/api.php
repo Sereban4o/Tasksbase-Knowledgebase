@@ -30,8 +30,8 @@ Route::prefix('v1')->group(function () {
 
     // ─── Public Auth Routes ───
     Route::post('/auth/register', [AuthController::class, 'register']);
-    Route::post('/auth/login', [AuthController::class, 'login']);
-    Route::post('/auth/forgot-password', [AuthController::class, 'forgotPassword']);
+    Route::post('/auth/login', [AuthController::class, 'login'])->middleware('throttle:5,1');
+    Route::post('/auth/forgot-password', [AuthController::class, 'forgotPassword'])->middleware('throttle:5,1');
     Route::post('/auth/reset-password', [AuthController::class, 'resetPassword']);
     Route::post('/auth/verify-email/{id}/{hash}', [AuthController::class, 'verifyEmail'])->middleware('signed');
 
@@ -85,6 +85,12 @@ Route::prefix('v1')->group(function () {
                 ]);
                 
                 $project = \App\Models\Project::where('key', $validated['project_key'])->firstOrFail();
+
+                $user = \Illuminate\Support\Facades\Auth::user();
+                if (!$user->isAdmin() && !$project->hasPermission($user, 'edit_boards')) {
+                    return response()->json(['message' => 'Permission denied'], 403);
+                }
+
                 $board = $project->boards()->create([
                     'name' => $validated['name'],
                     'type' => $validated['type'],
@@ -186,7 +192,7 @@ Route::prefix('v1')->group(function () {
     Route::get('/search', [SearchController::class, 'index']);
 
     // ─── Admin Routes ───
-    Route::middleware('auth:sanctum')->prefix('admin')->group(function () {
+    Route::middleware(['auth:sanctum', 'admin'])->prefix('admin')->group(function () {
         // User Management
         Route::get('/users', [AdminController::class, 'users']);
         Route::get('/users/{id}', [AdminController::class, 'userShow']);

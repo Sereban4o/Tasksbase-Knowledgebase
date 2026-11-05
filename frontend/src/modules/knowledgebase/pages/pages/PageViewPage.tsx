@@ -37,11 +37,17 @@ function formatSize(bytes?: number): string {
   return `${i === 0 ? value : value.toFixed(1)} ${units[i]}`
 }
 
+function withFileTokens(html: string, token: string): string {
+  if (!token) return html
+  return html.replace(/(\/api\/v1\/files\/\d+)(?!\?)/g, (_match, url) => `${url}?token=${encodeURIComponent(token)}`)
+}
+
 export default function PageView() {
   const { spaceKey, pageId } = useParams<{ spaceKey?: string; pageId?: string }>()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const token = typeof localStorage !== 'undefined' ? localStorage.getItem('auth_token') || '' : ''
 
   const { data: page, isLoading } = useQuery({
     queryKey: ['page', pageId],
@@ -152,7 +158,7 @@ export default function PageView() {
         }}
       >
         <Box
-          dangerouslySetInnerHTML={{ __html: page.body || 'No content yet.' }}
+          dangerouslySetInnerHTML={{ __html: withFileTokens(page.body || 'No content yet.', token) }}
         />
       </Box>
 
@@ -201,7 +207,7 @@ export default function PageView() {
                     <Tooltip title="Скачать">
                       <IconButton
                         component="a"
-                        href={`/api/v1/files/${attachment.file_id}/download`}
+                        href={`/api/v1/files/${attachment.file_id}/download?token=${encodeURIComponent(token)}`}
                         size="small"
                       >
                         <DownloadIcon fontSize="small" />

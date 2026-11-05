@@ -1,16 +1,14 @@
 import { useState } from 'react'
-import { useNavigate, Link as RouterLink } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 import {
   Box,
   Button,
   Card,
   CardContent,
   Container,
-  Grid,
   TextField,
   Typography,
   Alert,
-  Link,
 } from '@mui/material'
 import { useAuthContext } from '@/modules/auth/hooks/useAuth'
 
@@ -93,18 +91,6 @@ export default function LoginPage() {
               >
                 {loading ? 'Вход...' : 'Войти'}
               </Button>
-              <Grid container justifyContent="flex-end">
-                <Grid item>
-                  <Link
-                    component={RouterLink}
-                    to="/register"
-                    variant="body2"
-                    sx={{ textDecoration: 'none' }}
-                  >
-                    Нет аккаунта? Зарегистрироваться
-                  </Link>
-                </Grid>
-              </Grid>
             </Box>
           </CardContent>
         </Card>

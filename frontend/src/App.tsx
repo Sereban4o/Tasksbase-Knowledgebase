@@ -8,7 +8,6 @@ import {
 import { Box, CircularProgress } from '@mui/material'
 
 const LoginPage = lazy(() => import('./modules/auth/pages/LoginPage'))
-const RegisterPage = lazy(() => import('./modules/auth/pages/RegisterPage'))
 const ProfilePage = lazy(() => import('./modules/auth/pages/ProfilePage'))
 const KanbanBoardPage = lazy(() => import('./modules/tasksbase/boards/pages/KanbanBoardPage'))
 const IssueDetailPage = lazy(() => import('./modules/tasksbase/issues/pages/IssueDetailPage'))
@@ -49,7 +48,6 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 export function createAppRouter(router: RouteObject[] = []) {
   const routes: RouteObject[] = [
     { path: '/login', element: <LoginPage /> },
-    { path: '/register', element: <RegisterPage /> },
     {
       path: '/',
       element: (

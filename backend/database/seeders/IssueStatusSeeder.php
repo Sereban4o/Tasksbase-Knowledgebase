@@ -17,12 +17,13 @@ class IssueStatusSeeder extends Seeder
             ['name' => 'Closed', 'category' => 'done', 'color' => '#059669'],
         ];
 
-        foreach ($statuses as $status) {
+        foreach ($statuses as $index => $status) {
             IssueStatus::updateOrCreate(
                 ['name' => $status['name']],
                 [
                     'category' => $status['category'],
                     'color' => $status['color'],
+                    'sort_order' => $index,
                 ]
             );
         }

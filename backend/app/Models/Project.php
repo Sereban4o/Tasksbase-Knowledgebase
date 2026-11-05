@@ -66,4 +66,29 @@ class Project extends Model
             default => false,
         };
     }
+
+    /**
+     * Whether the user may view this project (and its issues/boards).
+     */
+    public function canView(User $user): bool
+    {
+        return $user->isAdmin()
+            || (int) $this->created_by === (int) $user->id
+            || in_array($this->visibility, ['public', 'team'], true)
+            || $this->isMember($user);
+    }
+
+    /**
+     * Scope a query to projects visible to the given user.
+     */
+    public function scopeVisibleTo($query, User $user)
+    {
+        return $query->where(function ($q) use ($user) {
+            $q->whereIn('visibility', ['public', 'team'])
+              ->orWhere('created_by', $user->id)
+              ->orWhereHas('members', function ($m) use ($user) {
+                  $m->where('user_id', $user->id);
+              });
+        });
+    }
 }

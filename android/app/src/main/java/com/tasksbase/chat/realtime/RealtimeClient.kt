@@ -46,6 +46,9 @@ class RealtimeClient(
     /** Invoked for MessageCreated / MessageUpdated / MessageDeleted. */
     var onMessageEvent: (() -> Unit)? = null
 
+    /** Invoked for MessageCreated delivered to the personal `private-user.*` channel. */
+    var onUserMessage: ((JSONObject) -> Unit)? = null
+
     private fun wsUrl(): String =
         "ws://$host:$port/app/$key?protocol=7&client=android&version=1.0&flash=false"
 
@@ -124,6 +127,15 @@ class RealtimeClient(
                     event.endsWith("MessageDeleted")
                 ) {
                     onMessageEvent?.invoke()
+                }
+
+                if (event.endsWith("MessageCreated") &&
+                    obj.optString("channel").startsWith("private-user.")
+                ) {
+                    val data = runCatching { JSONObject(obj.optString("data")) }.getOrNull()
+                    if (data != null) {
+                        onUserMessage?.invoke(data)
+                    }
                 }
             }
         }

@@ -23,13 +23,27 @@ data class UserDto(
         }
 }
 
+data class FileDto(
+    val id: Int = 0,
+    @SerializedName("original_name") val originalName: String? = null,
+    @SerializedName("mime_type") val mimeType: String? = null,
+    val size: Long = 0,
+    val path: String? = null,
+)
+
 data class MessageFileDto(
     val id: Int = 0,
+    @SerializedName("file_id") val fileId: Int = 0,
     @SerializedName("mime_type") val mimeType: String? = null,
     @SerializedName("thumbnail_url") val thumbnailUrl: String? = null,
     val url: String? = null,
     @SerializedName("file_name") val fileName: String? = null,
-)
+    val file: FileDto? = null,
+) {
+    val displayName: String get() = file?.originalName ?: fileName ?: "Файл"
+    val effectiveMime: String? get() = file?.mimeType ?: mimeType
+    val isImage: Boolean get() = effectiveMime?.startsWith("image/") == true
+}
 
 data class MessageDto(
     val id: Int = 0,
@@ -82,4 +96,5 @@ data class CreateChatRequest(
 data class SendMessageRequest(
     val body: String?,
     val type: String = "text",
+    @SerializedName("file_ids") val fileIds: List<Int>? = null,
 )

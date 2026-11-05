@@ -25,9 +25,18 @@ class MessageCreated implements ShouldBroadcastNow
 
     public function broadcastOn(): array
     {
-        return [
-            new PrivateChannel("chat.{$this->chat->id}"),
-        ];
+        $channels = [new PrivateChannel("chat.{$this->chat->id}")];
+
+        // Deliver a personal notification to every member except the sender.
+        foreach ($this->chat->members()->pluck('users.id') as $memberId) {
+            if ((int) $memberId === (int) $this->message->sender_id) {
+                continue;
+            }
+
+            $channels[] = new PrivateChannel("user.{$memberId}");
+        }
+
+        return $channels;
     }
 
     public function broadcastWith(): array
@@ -48,6 +57,12 @@ class MessageCreated implements ShouldBroadcastNow
                 'avatar' => $this->message->sender->avatar,
             ] : null,
             'files' => $this->message->files,
+            'chat_name' => $this->chat->name,
+            'chat_type' => $this->chat->type,
+            'sender_name' => $this->message->sender
+                ? trim($this->message->sender->first_name . ' ' . $this->message->sender->last_name)
+                : null,
+            'body_preview' => \Illuminate\Support\Str::limit((string) $this->message->body, 140),
         ];
     }
 }

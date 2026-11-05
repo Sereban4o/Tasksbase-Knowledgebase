@@ -27,6 +27,7 @@
                 <th>ID</th>
                 <th>Название</th>
                 <th>Категория</th>
+                <th>Порядок</th>
                 <th>Цвет</th>
                 <th>Используется</th>
                 <th>Действия</th>
@@ -38,6 +39,7 @@
                 <td>{{ $status->id }}</td>
                 <td><strong>{{ $status->name }}</strong></td>
                 <td>{{ $status->category ?? '-' }}</td>
+                <td>{{ $status->sort_order }}</td>
                 <td>
                     <span style="display: inline-block; width: 24px; height: 24px; background: {{ $status->color }}; border-radius: 4px; vertical-align: middle;"></span>
                     {{ $status->color }}
@@ -63,7 +65,7 @@
             </tr>
             @empty
             <tr>
-                <td colspan="6" style="text-align: center; padding: 2rem; color: #6B778C;">Статусы не найдены</td>
+                <td colspan="7" style="text-align: center; padding: 2rem; color: #6B778C;">Статусы не найдены</td>
             </tr>
             @endforelse
         </tbody>

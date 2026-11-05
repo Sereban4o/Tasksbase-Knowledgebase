@@ -1,7 +1,7 @@
 # Production stack for Tasksbase-Knowledgebase
 #
 #   External IP : <PUBLIC_IP>   (public)
-#   Internal IP : 192.168.0.5     (Ubuntu + Docker host)
+#   Internal IP : Внутренний IP   (Ubuntu + Docker host)
 #
 # Only nginx (port 80) is published. PostgreSQL / Redis / Meilisearch / Reverb
 # stay on the internal Docker network and are NOT reachable from the internet.
@@ -151,8 +151,28 @@ services:
         max-size: "10m"
         max-file: "3"
 
+  ntfy:
+    image: binwiederhier/ntfy
+    command: serve
+    environment:
+      - NTFY_BASE_URL=http://212.109.16.56:8081
+      - NTFY_CACHE_FILE=/var/cache/ntfy/cache.db
+      - NTFY_ATTACHMENT_CACHE_DIR=/var/cache/ntfy/attachments
+      - NTFY_BEHIND_PROXY=true
+    ports:
+      - "8081:80"
+    volumes:
+      - ntfydata:/var/cache/ntfy
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
 volumes:
   pgdata:
   redisdata:
   meilisearchdata:
   storage_data:
+  ntfydata:

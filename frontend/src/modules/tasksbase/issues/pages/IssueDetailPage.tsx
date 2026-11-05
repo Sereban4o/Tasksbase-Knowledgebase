@@ -44,12 +44,18 @@ import type { Issue, IssueComment } from '@/types'
 import RichTextEditor from '@/modules/shared/components/RichTextEditor'
 import { useState } from 'react'
 
+function withFileTokens(html: string, token: string): string {
+  if (!token) return html
+  return html.replace(/(\/api\/v1\/files\/\d+)(?!\?)/g, (_match, url) => `${url}?token=${encodeURIComponent(token)}`)
+}
+
 type Priority = 'lowest' | 'low' | 'medium' | 'high' | 'highest'
 
 export default function IssueDetailPage() {
   const { issueId } = useParams<{ issueId?: string }>()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
+  const token = typeof localStorage !== 'undefined' ? localStorage.getItem('auth_token') || '' : ''
   const [newComment, setNewComment] = useState('')
   const [editData, setEditData] = useState({
     summary: '',
@@ -329,7 +335,7 @@ export default function IssueDetailPage() {
                 </Button>
               </Box>
               {issue.description ? (
-                <Box sx={{ whiteSpace: 'pre-wrap' }} dangerouslySetInnerHTML={{ __html: issue.description }} />
+                <Box sx={{ whiteSpace: 'pre-wrap' }} dangerouslySetInnerHTML={{ __html: withFileTokens(issue.description || '', token) }} />
               ) : (
                 <Typography variant="body2" color="text.secondary">
                   Нет описания

@@ -85,4 +85,17 @@ class AuthTest extends TestCase
         $response->assertStatus(200)
             ->assertJsonPath('message', 'Logged out successfully');
     }
+
+    public function test_registration_can_be_disabled(): void
+    {
+        config(['app.allow_registration' => false]);
+
+        $this->postJson('/api/v1/auth/register', [
+            'email' => 'blocked@example.com',
+            'password' => 'password123',
+            'password_confirmation' => 'password123',
+            'first_name' => 'Blocked',
+            'last_name' => 'User',
+        ])->assertStatus(403);
+    }
 }

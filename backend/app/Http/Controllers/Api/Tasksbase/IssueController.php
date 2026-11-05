@@ -15,6 +15,7 @@ use App\Models\IssueLink;
 use App\Models\Project;
 use App\Models\User;
 use App\Models\ActivityLog;
+use App\Support\HtmlSanitizer;
 use App\Events\IssueUpdated;
 use App\Events\NewComment;
 use App\Events\BoardUpdated;
@@ -37,6 +38,13 @@ class IssueController extends Controller
         $perPage = $request->input('per_page', 20);
 
         $query = Issue::with(['project', 'type', 'status', 'assignee']);
+
+        $user = Auth::user();
+        if (!$user->isAdmin()) {
+            $query->whereHas('project', function ($q) use ($user) {
+                $q->visibleTo($user);
+            });
+        }
 
         // Filter by project
         if ($request->has('project_id')) {
@@ -78,6 +86,10 @@ class IssueController extends Controller
             'incomingLinks.source', 'incomingLinks.target', 'incomingLinks.creator',
         ])->findOrFail($issueId);
 
+        if (!Auth::user()->isAdmin() && !$issue->project?->canView(Auth::user())) {
+            return response()->json(['message' => 'Permission denied'], 403);
+        }
+
         return response()->json($issue);
     }
 
@@ -86,6 +98,11 @@ class IssueController extends Controller
         $validated = $request->validated();
 
         $project = Project::where('key', $validated['project_key'])->firstOrFail();
+
+        $user = Auth::user();
+        if (!$user->isAdmin() && !$project->hasPermission($user, 'create_issues')) {
+            return response()->json(['message' => 'Permission denied'], 403);
+        }
 
         return DB::transaction(function () use ($validated, $project) {
             // Generate issue key using max sequence for this project
@@ -108,14 +125,14 @@ class IssueController extends Controller
                 'issue_type_id' => $validated['issue_type_id']
                     ?? IssueType::query()->orderBy('id')->value('id'),
                 'status_id' => $validated['status_id']
-                    ?? IssueStatus::query()->orderBy('id')->value('id'),
+                    ?? IssueStatus::query()->orderBy('sort_order')->orderBy('id')->value('id'),
                 'created_by' => Auth::id(),
                 'assigned_to' => $validated['assignee_id'] ?? null,
                 'reporter_id' => Auth::id(),
                 'parent_id' => $validated['parent_id'] ?? null,
                 'epic_id' => $validated['epic_id'] ?? null,
                 'summary' => $validated['summary'],
-                'description' => $validated['description'] ?? null,
+                'description' => HtmlSanitizer::clean($validated['description'] ?? null),
                 'key' => $key,
                 'priority' => $validated['priority'] ?? 'medium',
                 'start_date' => $validated['start_date'] ?? null,
@@ -188,6 +205,10 @@ class IssueController extends Controller
 
         $validated = $request->validated();
 
+        if (array_key_exists('description', $validated)) {
+            $validated['description'] = HtmlSanitizer::clean($validated['description']);
+        }
+
         // Map assignee_id to assigned_to
         if (isset($validated['assignee_id'])) {
             $validated['assigned_to'] = $validated['assignee_id'];
@@ -238,6 +259,11 @@ class IssueController extends Controller
 
     public function comments(Request $request, string $issueId)
     {
+        $issue = Issue::findOrFail($issueId);
+        if (!Auth::user()->isAdmin() && !$issue->project?->canView(Auth::user())) {
+            return response()->json(['message' => 'Permission denied'], 403);
+        }
+
         $comments = IssueComment::where('issue_id', $issueId)
             ->with('user')
             ->latest()
@@ -248,6 +274,11 @@ class IssueController extends Controller
 
     public function addComment(StoreIssueCommentRequest $request, string $issueId)
     {
+        $issue = Issue::findOrFail($issueId);
+        if (!Auth::user()->isAdmin() && !$issue->project?->canView(Auth::user())) {
+            return response()->json(['message' => 'Permission denied'], 403);
+        }
+
         $validated = $request->validated();
 
         $comment = IssueComment::create([
@@ -263,6 +294,11 @@ class IssueController extends Controller
 
     public function addAttachment(Request $request, string $issueId)
     {
+        $issue = Issue::findOrFail($issueId);
+        if (!Auth::user()->isAdmin() && !$issue->project?->canView(Auth::user())) {
+            return response()->json(['message' => 'Permission denied'], 403);
+        }
+
         $validated = $request->validate([
             'file_id' => 'required|exists:files,id',
         ]);
@@ -278,6 +314,11 @@ class IssueController extends Controller
 
     public function linkIssue(Request $request, string $issueId)
     {
+        $issue = Issue::findOrFail($issueId);
+        if (!Auth::user()->isAdmin() && !$issue->project?->canView(Auth::user())) {
+            return response()->json(['message' => 'Permission denied'], 403);
+        }
+
         $validated = $request->validate([
             'linked_issue_id' => 'required|exists:issues,id',
             'link_type' => 'nullable|string|max:50',
@@ -301,6 +342,10 @@ class IssueController extends Controller
         ]);
 
         $issue = Issue::findOrFail($issueId);
+
+        if (!Auth::user()->isAdmin() && !$issue->project?->canView(Auth::user())) {
+            return response()->json(['message' => 'Permission denied'], 403);
+        }
 
         if (isset($validated['status_id'])) {
             $issue->update(['status_id' => $validated['status_id']]);

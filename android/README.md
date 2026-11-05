@@ -16,7 +16,7 @@
 ## Требования
 
 - **Android Studio** (Ladybug/2024.2+ или новее) со встроенным JDK 17.
-- Запущенный бэкенд проекта: `docker compose up -d` (nginx на порту `8000`, Reverb на `8080`).
+- Доступный сервер проекта. Адрес и порт задаются прямо в приложении (см. «Подключение к сайту»).
 - Для сборки APK нужен Android SDK (Android Studio ставит его автоматически).
 
 ## Быстрый старт
@@ -27,26 +27,24 @@
 4. Войдите тестовым аккаунтом:
    - `admin@example.com` / `password`
 
-## Настройка адреса сервера
+## Подключение к сайту (адрес и порт)
 
-Адреса заданы в `app/build.gradle.kts` (`defaultConfig.buildConfigField`):
+Сервер задаётся **в самом приложении** и сохраняется на телефоне (DataStore) — пересобирать APK не нужно.
 
-```kotlin
-buildConfigField("String", "API_BASE_URL", "\"http://10.0.2.2:8000/api/v1/\"")
-buildConfigField("String", "WS_HOST", "\"10.0.2.2\"")
-buildConfigField("int", "WS_PORT", "8080")
-buildConfigField("String", "WS_KEY", "\"chat-key\"")
-buildConfigField("String", "BROADCAST_AUTH_URL", "\"http://10.0.2.2:8000/broadcasting/auth\"")
-```
+1. На экране входа нажмите на строку **«Сервер: …»**.
+2. Укажите адрес и порт сайта:
+   - **Прод (внешний доступ):** адрес `Внешний IP`, порт `80`
+   - **Внутренняя сеть:** адрес `Внутренний IP`, порт `80`
+   - **Эмулятор + локальный dev-бэкенд:** адрес `10.0.2.2`, порт `8000`
+3. Нажмите **«Сохранить»**, затем войдите по email и паролю.
 
-- **Эмулятор**: `10.0.2.2` — это хост-машина. Ничего менять не нужно.
-- **Реальное устройство** (тот же Wi-Fi): замените `10.0.2.2` на LAN-IP вашего ПК,
-  например `192.168.1.10`. Также убедитесь, что порты `8000` и `8080` доступны в локальной сети.
-- **Устройство по USB** (альтернатива): выполните
-  `adb reverse tcp:8000 tcp:8000` и `adb reverse tcp:8080 tcp:8080`,
-  а в конфиге используйте `127.0.0.1` вместо `10.0.2.2`.
+Примечания:
+- Один адрес используется и для REST API (`/api/v1`), и для WebSocket (`/app/...`), и для `/broadcasting/auth` — в проде всё проксируется nginx на одном порту (80).
+- Адрес указывается **без** `http://` и без пути (приложение само добавляет схему и пути).
+- При смене сервера текущая сессия сбрасывается (токен принадлежит прежнему серверу) — нужно войти заново.
+- Настройка сохраняется на устройстве и переживает перезапуск приложения.
 
-После изменения `buildConfigField` — Sync Project и пересоберите.
+> Значения по умолчанию (пока ничего не сохранено) берутся из `API_BASE_URL` в `app/build.gradle.kts` (`10.0.2.2:8000`).
 
 ## Используемые API endpoints
 
@@ -61,22 +59,23 @@ buildConfigField("String", "BROADCAST_AUTH_URL", "\"http://10.0.2.2:8000/broadca
 | Список пользователей | `GET /api/v1/users/all` |
 | Авторизация WS-канала | `POST /broadcasting/auth` |
 
-Real-time: WebSocket `ws://HOST:8080/app/chat-key` (протокол Pusher), приватный канал
-`private-chat.{chatId}`, события `MessageCreated` / `MessageUpdated` / `MessageDeleted`.
+Real-time: WebSocket `ws://HOST:PORT/app/chat-key` (протокол Pusher), где HOST:PORT — адрес из
+настроек приложения; приватный канал `private-chat.{chatId}`, события `MessageCreated` / `MessageUpdated` / `MessageDeleted`.
 
 ## Структура проекта
 
 ```
 android/
   build.gradle.kts, settings.gradle.kts, gradle.properties
-  app/build.gradle.kts                 # версии, зависимости, buildConfigField (адреса)
+  app/build.gradle.kts                 # версии, зависимости, API_BASE_URL по умолчанию
   app/src/main/AndroidManifest.xml
   app/src/main/java/com/tasksbase/chat/
     ChatApplication.kt                 # загрузка сессии при старте
     MainActivity.kt
     di/ServiceLocator.kt, Session.kt    # ручной DI, текущая сессия
-    data/remote/Dtos.kt, ApiService.kt, AuthInterceptor.kt
+    data/remote/Dtos.kt, ApiService.kt, AuthInterceptor.kt, ServerAddressInterceptor.kt
     data/local/TokenStore.kt           # DataStore: токен + пользователь
+    data/local/ServerConfigStore.kt    # DataStore: адрес/порт сервера
     data/repository/AuthRepository.kt, ChatRepository.kt
     realtime/RealtimeClient.kt         # Pusher-протокол (Reverb) поверх OkHttp
     ui/AppRoot.kt
@@ -93,6 +92,6 @@ android/
 
 ## Возможные проблемы
 
-- **«Нет соединения с сервером»** — проверьте, что `docker compose up -d` запущен и адрес в `buildConfigField` корректный (эмулятор → `10.0.2.2`).
-- **Сообщения не приходят мгновенно** — проверьте, что контейнер `tasksbase-knowledgebase-reverb` запущен и порт `8080` доступен; приложение продолжит работать через polling.
+- **«Нет соединения с сервером»** — проверьте адрес/порт в настройках приложения («Сервер: …») и что сервер доступен (в проде — порт 80).
+- **Сообщения не приходят мгновенно** — проверьте, что сервис Reverb работает и порт сервера доступен; приложение продолжит работать через polling.
 - **Cleartext HTTP/WS** разрешён в манифесте (`android:usesCleartextTraffic="true"`) — для локальной разработки.

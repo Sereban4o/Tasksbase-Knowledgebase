@@ -2,8 +2,12 @@
 
 namespace Tests\Feature;
 
+use App\Models\Chat;
+use App\Models\Message;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Crypt;
+use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 class ChatTest extends TestCase
@@ -82,11 +86,13 @@ class ChatTest extends TestCase
 
         $response->assertStatus(201)->assertJsonPath('body', 'Hello there');
 
-        $this->assertDatabaseHas('messages', [
-            'chat_id' => $chatId,
-            'sender_id' => $this->user->id,
-            'body' => 'Hello there',
-        ]);
+        $raw = DB::table('messages')
+            ->where('chat_id', $chatId)
+            ->where('sender_id', $this->user->id)
+            ->value('body');
+
+        $this->assertNotSame('Hello there', $raw);
+        $this->assertSame('Hello there', Crypt::decryptString($raw));
     }
 
     public function test_can_list_messages(): void
@@ -118,10 +124,10 @@ class ChatTest extends TestCase
 
         $response->assertStatus(200)->assertJsonPath('body', 'Edited');
 
-        $this->assertDatabaseHas('messages', [
-            'id' => $messageId,
-            'body' => 'Edited',
-        ]);
+        $raw = DB::table('messages')->where('id', $messageId)->value('body');
+
+        $this->assertNotSame('Edited', $raw);
+        $this->assertSame('Edited', Crypt::decryptString($raw));
     }
 
     public function test_can_delete_own_message(): void
@@ -149,5 +155,39 @@ class ChatTest extends TestCase
         $this->actingAs($stranger, 'sanctum')
             ->getJson("/api/v1/chat/{$chatId}/messages")
             ->assertStatus(403);
+    }
+
+    public function test_message_body_is_encrypted_at_rest(): void
+    {
+        $chatId = $this->createGroupChat();
+
+        $this->withToken($this->token)
+            ->postJson("/api/v1/chat/{$chatId}/messages", ['body' => 'super secret text'])
+            ->assertStatus(201)
+            ->assertJsonPath('body', 'super secret text');
+
+        $raw = DB::table('messages')->where('chat_id', $chatId)->value('body');
+
+        $this->assertNotSame('super secret text', $raw);
+        $this->assertSame('super secret text', Crypt::decryptString($raw));
+    }
+
+    public function test_message_created_broadcasts_to_member_user_channels(): void
+    {
+        $chatId = $this->createGroupChat();
+
+        $message = Message::create([
+            'chat_id' => $chatId,
+            'sender_id' => $this->user->id,
+            'body' => 'hello',
+            'type' => 'text',
+        ]);
+
+        $event = new \App\Events\MessageCreated($message, Chat::findOrFail($chatId));
+        $channels = array_map(fn ($channel) => $channel->name, $event->broadcastOn());
+
+        $this->assertContains("private-chat.{$chatId}", $channels);
+        $this->assertContains('private-user.' . $this->other->id, $channels);
+        $this->assertNotContains('private-user.' . $this->user->id, $channels);
     }
 }

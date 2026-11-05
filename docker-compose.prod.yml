@@ -153,12 +153,18 @@ services:
 
   ntfy:
     image: binwiederhier/ntfy
-    command: serve
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - 'AUTH=/var/cache/ntfy/auth.db; if [ ! -f "$$AUTH" ]; then ntfy serve & P=$$!; sleep 3; kill $$P 2>/dev/null; wait $$P 2>/dev/null; fi; ntfy user add --ignore-exists --role=admin tasksbase || true; exec ntfy serve'
     environment:
       - NTFY_BASE_URL=http://212.109.16.56:8081
       - NTFY_CACHE_FILE=/var/cache/ntfy/cache.db
       - NTFY_ATTACHMENT_CACHE_DIR=/var/cache/ntfy/attachments
       - NTFY_BEHIND_PROXY=true
+      - NTFY_AUTH_FILE=/var/cache/ntfy/auth.db
+      - NTFY_AUTH_DEFAULT_ACCESS=deny-all
+      - NTFY_PASSWORD=tasksbase
+      - NTFY_INIT_USER=tasksbase
     ports:
       - "8081:80"
     volumes:

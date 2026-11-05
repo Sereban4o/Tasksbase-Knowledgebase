@@ -50,6 +50,8 @@ fun LoginScreen(onLoggedIn: () -> Unit) {
     var port by remember { mutableStateOf(initialServer.port.toString()) }
     var ntfyHost by remember { mutableStateOf("") }
     var ntfyPort by remember { mutableStateOf("8081") }
+    var ntfyUser by remember { mutableStateOf("") }
+    var ntfyPass by remember { mutableStateOf("") }
 
     val scope = rememberCoroutineScope()
 
@@ -72,6 +74,8 @@ fun LoginScreen(onLoggedIn: () -> Unit) {
                     server = ServerConfig(normalizeHost(host), parsedPort),
                     ntfyHost = normalizeHost(ntfyHost),
                     ntfyPort = parsedNtfyPort,
+                    ntfyUser = ntfyUser.trim(),
+                    ntfyPass = ntfyPass,
                 )
                 onLoggedIn()
             } catch (e: Exception) {
@@ -151,12 +155,16 @@ fun LoginScreen(onLoggedIn: () -> Unit) {
             initialPort = port,
             initialNtfyHost = ntfyHost,
             initialNtfyPort = ntfyPort,
+            initialNtfyUser = ntfyUser,
+            initialNtfyPass = ntfyPass,
             onDismiss = { showServerDialog = false },
-            onSaved = { newHost, newPort, newNtfyHost, newNtfyPort ->
+            onSaved = { newHost, newPort, newNtfyHost, newNtfyPort, newNtfyUser, newNtfyPass ->
                 host = newHost
                 port = newPort
                 ntfyHost = newNtfyHost
                 ntfyPort = newNtfyPort
+                ntfyUser = newNtfyUser
+                ntfyPass = newNtfyPass
                 showServerDialog = false
             },
         )
@@ -169,13 +177,17 @@ private fun ServerSettingsDialog(
     initialPort: String,
     initialNtfyHost: String,
     initialNtfyPort: String,
+    initialNtfyUser: String,
+    initialNtfyPass: String,
     onDismiss: () -> Unit,
-    onSaved: (String, String, String, String) -> Unit,
+    onSaved: (String, String, String, String, String, String) -> Unit,
 ) {
     var host by remember { mutableStateOf(initialHost) }
     var port by remember { mutableStateOf(initialPort) }
     var ntfyHost by remember { mutableStateOf(initialNtfyHost) }
     var ntfyPort by remember { mutableStateOf(initialNtfyPort) }
+    var ntfyUser by remember { mutableStateOf(initialNtfyUser) }
+    var ntfyPass by remember { mutableStateOf(initialNtfyPass) }
     var error by remember { mutableStateOf<String?>(null) }
 
     AlertDialog(
@@ -218,6 +230,23 @@ private fun ServerSettingsDialog(
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     modifier = Modifier.fillMaxWidth(),
                 )
+                Spacer(Modifier.height(8.dp))
+                OutlinedTextField(
+                    value = ntfyUser,
+                    onValueChange = { ntfyUser = it },
+                    label = { Text("ntfy пользователь") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                Spacer(Modifier.height(8.dp))
+                OutlinedTextField(
+                    value = ntfyPass,
+                    onValueChange = { ntfyPass = it },
+                    label = { Text("ntfy пароль") },
+                    singleLine = true,
+                    visualTransformation = PasswordVisualTransformation(),
+                    modifier = Modifier.fillMaxWidth(),
+                )
                 if (error != null) {
                     Spacer(Modifier.height(8.dp))
                     Text(error!!, color = MaterialTheme.colorScheme.error, fontSize = 12.sp)
@@ -241,7 +270,14 @@ private fun ServerSettingsDialog(
                     } else if (ntfyHost.isNotBlank() && (ntfyPort.toIntOrNull() ?: 0) !in 1..65535) {
                         error = "Порт ntfy: 1..65535"
                     } else {
-                        onSaved(normalizeHost(host), parsedPort.toString(), normalizeHost(ntfyHost), ntfyPort)
+                        onSaved(
+                            normalizeHost(host),
+                            parsedPort.toString(),
+                            normalizeHost(ntfyHost),
+                            ntfyPort,
+                            ntfyUser.trim(),
+                            ntfyPass,
+                        )
                     }
                 },
             ) {

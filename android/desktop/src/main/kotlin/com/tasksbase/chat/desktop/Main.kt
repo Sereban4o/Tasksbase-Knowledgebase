@@ -76,6 +76,7 @@ import retrofit2.http.Path
 import retrofit2.http.Query
 import java.io.File
 import java.net.URL
+import java.util.Base64
 import java.util.concurrent.TimeUnit
 import java.util.prefs.Preferences
 import javax.swing.JFileChooser
@@ -172,6 +173,8 @@ data class Account(
     val ntfyHost: String,
     val ntfyPort: Int,
     val topic: String,
+    val ntfyUser: String? = null,
+    val ntfyPass: String? = null,
     val token: String,
     val user: UserDto,
 ) {
@@ -409,6 +412,8 @@ private fun LoginScreen(onLoggedIn: (Account) -> Unit) {
     var port by remember { mutableStateOf((Store.active?.port ?: 8000).toString()) }
     var ntfyHost by remember { mutableStateOf(Store.active?.ntfyHost ?: "") }
     var ntfyPort by remember { mutableStateOf((Store.active?.ntfyPort ?: 8081).toString()) }
+    var ntfyUser by remember { mutableStateOf(Store.active?.ntfyUser ?: "") }
+    var ntfyPass by remember { mutableStateOf(Store.active?.ntfyPass ?: "") }
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var loading by remember { mutableStateOf(false) }
@@ -433,6 +438,11 @@ private fun LoginScreen(onLoggedIn: (Account) -> Unit) {
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             OutlinedTextField(ntfyHost, { ntfyHost = it }, label = { Text("ntfy (необязательно)") }, singleLine = true, modifier = Modifier.width(280.dp))
             OutlinedTextField(ntfyPort, { v -> ntfyPort = v.filter { it.isDigit() } }, label = { Text("Порт ntfy") }, singleLine = true, modifier = Modifier.width(120.dp))
+        }
+        Spacer(Modifier.size(8.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            OutlinedTextField(ntfyUser, { ntfyUser = it }, label = { Text("ntfy пользователь") }, singleLine = true, modifier = Modifier.width(190.dp))
+            OutlinedTextField(ntfyPass, { ntfyPass = it }, label = { Text("ntfy пароль") }, singleLine = true, visualTransformation = PasswordVisualTransformation(), modifier = Modifier.width(210.dp))
         }
         Spacer(Modifier.size(12.dp))
         OutlinedTextField(
@@ -477,6 +487,8 @@ private fun LoginScreen(onLoggedIn: (Account) -> Unit) {
                                 ntfyHost = ntfyHost.trim(),
                                 ntfyPort = np,
                                 topic = "tasksbase-user-${response.user.id}",
+                                ntfyUser = ntfyUser.trim().ifBlank { null },
+                                ntfyPass = ntfyPass.ifBlank { null },
                                 token = response.token,
                                 user = response.user,
                             )
@@ -998,6 +1010,8 @@ private class RealtimeClient(
 private class NtfyClient(
     private val baseUrl: String,
     private val topic: String,
+    private val user: String? = null,
+    private val pass: String? = null,
     private val onMessage: (JSONObject) -> Unit,
 ) {
     private val client = OkHttpClient.Builder()
@@ -1014,7 +1028,14 @@ private class NtfyClient(
         closed = false
         thread = Thread {
             try {
-                val request = Request.Builder().url("$baseUrl/$topic/json").build()
+                val builder = Request.Builder().url("$baseUrl/$topic/json")
+                val u = user
+                val p = pass
+                if (!u.isNullOrBlank() && p != null) {
+                    val creds = Base64.getEncoder().encodeToString("$u:$p".toByteArray())
+                    builder.header("Authorization", "Basic $creds")
+                }
+                val request = builder.build()
                 client.newCall(request).execute().use { response ->
                     val source = response.body?.source() ?: return@use
                     while (!closed && !source.exhausted()) {
@@ -1076,6 +1097,8 @@ private object RealtimeController {
             ntfy = NtfyClient(
                 baseUrl = "http://${account.ntfyHost}:${account.ntfyPort}",
                 topic = account.topic,
+                user = account.ntfyUser,
+                pass = account.ntfyPass,
             ) { obj ->
                 Notifier.notify(
                     obj.optString("title").ifBlank { "Чат" },

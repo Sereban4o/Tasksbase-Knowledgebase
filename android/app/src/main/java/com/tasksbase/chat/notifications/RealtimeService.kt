@@ -54,7 +54,7 @@ class RealtimeService : Service() {
         ntfy?.close()
         ntfy = null
         if (account != null && account.ntfyHost.isNotBlank()) {
-            ntfy = NtfyClient(account.ntfyBaseUrl, account.ntfyTopic) { obj ->
+            ntfy = NtfyClient(account.ntfyBaseUrl, account.ntfyTopic, account.ntfyUser, account.ntfyPass) { obj ->
                 val title = obj.optString("title").ifBlank { "Tasksbase" }
                 val text = obj.optString("message").ifBlank { "Новое уведомление" }
                 NotificationHelper.showMessage(this, title, text)

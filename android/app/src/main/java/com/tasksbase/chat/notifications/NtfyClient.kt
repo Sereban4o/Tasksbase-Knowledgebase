@@ -1,5 +1,6 @@
 package com.tasksbase.chat.notifications
 
+import android.util.Base64
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.json.JSONObject
@@ -15,6 +16,8 @@ import java.util.concurrent.TimeUnit
 class NtfyClient(
     private val baseUrl: String,
     private val topic: String,
+    private val user: String? = null,
+    private val pass: String? = null,
     private val onMessage: (JSONObject) -> Unit,
 ) {
     private val client = OkHttpClient.Builder()
@@ -31,7 +34,14 @@ class NtfyClient(
         closed = false
         thread = Thread {
             try {
-                val request = Request.Builder().url("$baseUrl/$topic/json").build()
+                val builder = Request.Builder().url("$baseUrl/$topic/json")
+                val u = user
+                val p = pass
+                if (!u.isNullOrBlank() && p != null) {
+                    val creds = Base64.encodeToString("$u:$p".toByteArray(), Base64.NO_WRAP)
+                    builder.header("Authorization", "Basic $creds")
+                }
+                val request = builder.build()
                 client.newCall(request).execute().use { response ->
                     val source = response.body?.source() ?: return@use
                     while (!closed && !source.exhausted()) {

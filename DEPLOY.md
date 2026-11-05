@@ -6,9 +6,10 @@
 > - Репозиторий: `https://github.com/Sereban4o/Tasksbase-Knowledgebase`
 > - Каталог проекта на сервере: `/opt/tasksbase`
 > - Доступ: HTTP по IP, HTTPS пока нет. WebSocket идёт через nginx (`ws://`), при включении TLS станет `wss://`.
+> - Push-уведомления: **ntfy** на порту **8081** (с авторизацией).
 
 Стек: Laravel 13 (PHP 8.5) + React 19 + PostgreSQL 18 + Redis + Reverb + Meilisearch.
-Публикуется **только порт 80** (nginx). SPA собирается внутри `nginx`-образа.
+Публикуются **80** (nginx: SPA + API + WebSocket) и **8081** (ntfy push). SPA собирается внутри `nginx`-образа.
 
 ---
 
@@ -20,6 +21,7 @@
 |------|-----------|----------------|
 | **22/tcp** | SSH | да (по возможности ограничить по IP) |
 | **80/tcp** | Сайт + API + WebSocket (`ws://`) | да |
+| **8081/tcp** | ntfy — push-уведомления | да |
 | **443/tcp** | HTTPS/`wss` | опционально (позже) |
 
 ### 1.2 Внутренние — НЕ открывать в интернет
@@ -32,12 +34,13 @@
 ```bash
 sudo ufw allow 22/tcp
 sudo ufw allow 80/tcp
+sudo ufw allow 8081/tcp
 # sudo ufw allow 443/tcp   # когда включите HTTPS
 sudo ufw enable
 sudo ufw status
 ```
 
-> Если сервер за NAT-роутером: пробросьте на `Внутренний IP` только **80** (и **22** для SSH).
+> Если сервер за NAT-роутером: пробросьте на `Внутренний IP` **80**, **8081** и **22** (SSH).
 
 ---
 
@@ -94,6 +97,7 @@ php -r "echo 'base64:'.base64_encode(random_bytes(32)).PHP_EOL;"
 - `APP_KEY=base64:...`
 - заменить `CHANGE_ME_*`: `POSTGRES_PASSWORD`, `DB_PASSWORD` (должны совпадать), `REVERB_APP_SECRET`, `MEILI_MASTER_KEY`
 - `APP_URL`, `SANCTUM_STATEFUL_DOMAINS`, `CORS_ALLOWED_ORIGINS` — уже указывают на `Внешний IP`
+- `NTFY_USER` / `NTFY_PASSWORD` — логин/пароль публикации в ntfy (должны совпадать с `NTFY_PASSWORD` сервиса `ntfy` в compose)
 
 > `backend/.env.production` в git **не хранится** (в `.gitignore`). Создаётся один раз; `git pull`/`git checkout` его не перезаписывают.
 
@@ -121,6 +125,41 @@ docker compose -f docker-compose.prod.yml ps
 
 - Сайт: `http://Внешний IP`
 - Админка: `http://Внешний IP/admin/login`
+
+### 3.6 Push через ntfy (без Firebase)
+
+Сервис `ntfy` в `docker-compose.prod.yml` слушает **8081** и работает с включённой авторизацией:
+- `NTFY_AUTH_DEFAULT_ACCESS=deny-all` — без логина нельзя ни читать, ни публиковать;
+- при старте создаётся пользователь `tasksbase` с паролем из `NTFY_PASSWORD` (роль admin);
+- auth-база — SQLite в volume `ntfydata` (`/var/cache/ntfy/auth.db`);
+- топик на пользователя: `tasksbase-user-{id}`.
+
+Проверка:
+
+```bash
+# без авторизации — ожидается 403
+curl -s -o /dev/null -w "%{http_code}\n" -X POST http://localhost:8081 \
+  -H 'Content-Type: application/json' \
+  -d '{"topic":"tasksbase-user-1","message":"test"}'
+
+# с авторизацией — ожидается 200
+curl -s -o /dev/null -w "%{http_code}\n" -u tasksbase:tasksbase -X POST http://localhost:8081 \
+  -H 'Content-Type: application/json' \
+  -d '{"topic":"tasksbase-user-1","message":"test"}'
+```
+
+Смена пароля ntfy:
+1. задать новый `NTFY_PASSWORD` в `docker-compose.prod.yml` (сервис `ntfy`) **и** в `backend/.env.production`;
+2. удалить auth-базу и пересоздать контейнер:
+
+```bash
+docker compose -f docker-compose.prod.yml exec ntfy rm -f /var/cache/ntfy/auth.db
+docker compose -f docker-compose.prod.yml up -d --force-recreate ntfy app
+```
+
+3. обновить пароль ntfy в аккаунтах клиентов (Android/Windows).
+
+> Полный сброс подписок/паролей: удалить volume `ntfydata`.
 
 ---
 
@@ -250,6 +289,7 @@ docker compose -f docker-compose.prod.yml logs -f --tail=100
 - [ ] Логин работает (`/api/v1/auth/login`)
 - [ ] WebSocket подключается (`ws://Внешний IP/app/...`)
 - [ ] Загрузка файлов/вложений работает
+- [ ] ntfy: без логина — 403, с логином — 200; push приходит в клиенты
 - [ ] `docker compose ... ps` — все сервисы `Up`
 
 ---
@@ -370,17 +410,64 @@ docker run --rm -v tasksbase-knowledgebase_storage_data:/data -v $PWD:/backup al
 - [ ] Сменён пароль `admin@example.com`
 - [ ] Заданы сильные `POSTGRES_PASSWORD`/`DB_PASSWORD`, `REVERB_APP_SECRET`, `MEILI_MASTER_KEY`
 - [ ] `APP_DEBUG=false`, `APP_ENV=production`
-- [ ] Наружу открыты только 22/80 (443 позже); БД, Redis, Meilisearch, Reverb **не** опубликованы
+- [ ] Наружу открыты только 22/80/8081 (443 позже); БД, Redis, Meilisearch, Reverb **не** опубликованы
 - [ ] `.env` / `.env.production` не в git (только `*.example`), доступ к репо — deploy key (read-only)
 - [ ] SSH ограничен по IP (по возможности)
 - [ ] Настроен регулярный бэкап БД и `storage_data`
+- [ ] Сменён пароль ntfy (`NTFY_PASSWORD`) и он совпадает в compose, `backend/.env.production` и клиентах
+- [ ] Порт 8081 открыт только для ntfy; auth включён (`deny-all`)
+
+---
+
+## Шаг 14. Клиенты: Android и Windows
+
+Оба приложения поддерживают **несколько аккаунтов**, каждый — со своим сервером и своим ntfy.
+
+### 14.1 Android (APK)
+
+Сборка через Android Studio или Gradle 8.7 + JDK 17:
+
+```bash
+gradle -p android :app:assembleDebug
+```
+
+APK: `android/app/build/outputs/apk/debug/app-debug.apk`.
+
+### 14.2 Windows (exe + MSI)
+
+```bash
+gradle -p android :desktop:createDistributable
+gradle -p android :desktop:packageMsi
+```
+
+- EXE: `android/desktop/build/compose/binaries/main/app/TasksbaseChat/TasksbaseChat.exe`
+- MSI: `android/desktop/build/compose/binaries/main/msi/TasksbaseChat-1.0.0.msi`
+
+> MSI требует WiX — Gradle скачивает его автоматически.
+
+### 14.3 Добавление аккаунта
+
+При входе указываются:
+- **Сервер**: `IP:80` (прод) или ваш адрес;
+- **ntfy**: `IP:8081`, **пользователь** и **пароль** ntfy (по умолчанию `tasksbase` / `tasksbase`);
+- email/пароль пользователя этого сервера.
+
+Каждый аккаунт хранит свой сервер, WebSocket и ntfy — переключение в меню сверху (Android — тап по заголовку, Windows — меню аккаунта).
+
+### 14.4 Windows: трей и автозапуск
+
+Меню аккаунта → **Настройки…**:
+- **Автозапуск при входе в Windows** — запись в `HKCU\Software\Microsoft\Windows\CurrentVersion\Run` (без админа; доступно в установленной/упакованной версии);
+- **Сворачивать в трей при запуске** — приложение стартует в трее;
+- закрытие окна (X) сворачивает в трей; «Выход» в трее — полное завершение.
+
+Уведомления приходят через WebSocket (Reverb) и ntfy, пока приложение запущено.
 
 ---
 
 ## Быстрая шпаргалка
 
-**Релиз (локально):**
-```bash
+**Релиз (локально):**```bash
 git checkout master && git pull --ff-only
 (cd backend && php artisan test) && (cd frontend && npm run build)
 git tag -a vX.Y.Z -m "Release vX.Y.Z"

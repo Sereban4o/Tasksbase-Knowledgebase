@@ -10,6 +10,7 @@ use App\Models\PageLabel;
 use App\Models\PageAttachment;
 use App\Models\File;
 use App\Models\Space;
+use App\Support\HtmlSanitizer;
 use App\Events\PageUpdated;
 use App\Events\NewComment;
 use Illuminate\Http\Request;
@@ -20,6 +21,10 @@ class PageController extends Controller
     public function index(Request $request, string $spaceKey)
     {
         $space = Space::where('key', $spaceKey)->firstOrFail();
+
+        if (!$space->canView(Auth::user())) {
+            return response()->json(['message' => 'Permission denied'], 403);
+        }
 
         $query = Page::where('space_id', $space->id)
             ->with(['author', 'space', 'parent'])
@@ -42,6 +47,10 @@ class PageController extends Controller
     {
         $space = Space::where('key', $spaceKey)->firstOrFail();
 
+        if (!$space->canView(Auth::user())) {
+            return response()->json(['message' => 'Permission denied'], 403);
+        }
+
         $pages = Page::where('space_id', $space->id)
             ->with(['author', 'space'])
             ->latest()
@@ -53,6 +62,10 @@ class PageController extends Controller
     public function tree(Request $request, string $spaceKey)
     {
         $space = Space::where('key', $spaceKey)->firstOrFail();
+
+        if (!$space->canView(Auth::user())) {
+            return response()->json(['message' => 'Permission denied'], 403);
+        }
 
         $pages = Page::where('space_id', $space->id)
             ->whereNull('parent_id')
@@ -68,6 +81,10 @@ class PageController extends Controller
     {
         $page = Page::with(['space', 'author', 'lastEditor', 'parent', 'children'])
             ->findOrFail($pageId);
+
+        if (!$page->space || !$page->space->canView(Auth::user())) {
+            return response()->json(['message' => 'Permission denied'], 403);
+        }
 
         return response()->json($page);
     }
@@ -94,7 +111,7 @@ class PageController extends Controller
             'author_id' => Auth::id(),
             'last_edited_by' => Auth::id(),
             'title' => $validated['title'],
-            'body' => $validated['body'] ?? '',
+            'body' => HtmlSanitizer::clean($validated['body'] ?? ''),
             'status' => $validated['status'] ?? 'draft',
             'version' => 1,
             'labels' => $validated['labels'] ?? [],
@@ -106,7 +123,7 @@ class PageController extends Controller
             'version' => 1,
             'author_id' => Auth::id(),
             'summary' => 'Initial version',
-            'body_snapshot' => $validated['body'] ?? '',
+            'body_snapshot' => HtmlSanitizer::clean($validated['body'] ?? ''),
         ]);
 
         // Save labels
@@ -136,6 +153,10 @@ class PageController extends Controller
             'status' => 'sometimes|in:draft,published,archived',
             'labels' => 'nullable|array',
         ]);
+
+        if (array_key_exists('body', $validated)) {
+            $validated['body'] = HtmlSanitizer::clean($validated['body']);
+        }
 
         // Save version before updating
         $newVersion = $page->version + 1;

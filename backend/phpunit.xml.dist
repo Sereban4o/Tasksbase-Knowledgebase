@@ -23,6 +23,7 @@
         <env name="APP_URL" value="http://localhost" force="true"/>
         <env name="BCRYPT_ROUNDS" value="4" force="true"/>
         <env name="CACHE_DRIVER" value="array" force="true"/>
+        <env name="CACHE_STORE" value="array" force="true"/>
         <env name="BROADCAST_DRIVER" value="null" force="true"/>
         <env name="DB_CONNECTION" value="pgsql" force="true"/>
         <env name="DB_HOST" value="postgres" force="true"/>
@@ -42,6 +43,7 @@
         <server name="APP_URL" value="http://localhost"/>
         <server name="BCRYPT_ROUNDS" value="4"/>
         <server name="CACHE_DRIVER" value="array"/>
+        <server name="CACHE_STORE" value="array"/>
         <server name="BROADCAST_DRIVER" value="null"/>
         <server name="DB_CONNECTION" value="pgsql"/>
         <server name="DB_HOST" value="postgres"/>

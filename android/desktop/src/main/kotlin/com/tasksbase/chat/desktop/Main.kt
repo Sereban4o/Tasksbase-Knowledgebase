@@ -28,11 +28,14 @@ import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.darkColorScheme
+import androidx.compose.material3.lightColorScheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
@@ -41,6 +44,7 @@ import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -79,6 +83,7 @@ import java.net.URL
 import java.util.Base64
 import java.util.concurrent.TimeUnit
 import java.util.prefs.Preferences
+import kotlin.system.exitProcess
 import javax.swing.JFileChooser
 import javax.swing.SwingUtilities
 import androidx.compose.runtime.DisposableEffect
@@ -148,35 +153,35 @@ data class ChatDto(
 
 data class PageDto<T>(val data: List<T> = emptyList())
 
-data class LoginRequest(val email: String, val password: String)
-data class LoginResponse(val token: String, val user: UserDto)
+data class LoginRequest(val email: String = "", val password: String = "")
+data class LoginResponse(val token: String = "", val user: UserDto = UserDto())
 
 data class SendMessageRequest(
-    val body: String?,
+    val body: String? = null,
     val type: String = "text",
     @SerializedName("file_ids") val fileIds: List<Int>? = null,
 )
 
 data class CreateChatRequest(
-    val type: String,
-    val name: String?,
-    val description: String?,
-    @SerializedName("user_ids") val userIds: List<Int>,
+    val type: String = "dm",
+    val name: String? = null,
+    val description: String? = null,
+    @SerializedName("user_ids") val userIds: List<Int> = emptyList(),
 )
 
 // ─────────────────────────── Account store ───────────────────────────
 
 data class Account(
-    val id: String,
-    val host: String,
-    val port: Int,
-    val ntfyHost: String,
-    val ntfyPort: Int,
-    val topic: String,
+    val id: String = "",
+    val host: String = "",
+    val port: Int = 0,
+    val ntfyHost: String = "",
+    val ntfyPort: Int = 0,
+    val topic: String = "",
     val ntfyUser: String? = null,
     val ntfyPass: String? = null,
-    val token: String,
-    val user: UserDto,
+    val token: String = "",
+    val user: UserDto = UserDto(),
 ) {
     val display: String get() = "$host:$port"
 }
@@ -303,6 +308,8 @@ object Net {
 
 // ───────────────────────────── App ─────────────────────────────
 
+private val LocalIsDark = staticCompositionLocalOf { false }
+
 private val Accent = Color(0xFF3390EC)
 private val ChatBg = Color(0xFFE6EBEE)
 private val BubbleOut = Color(0xFFEEFFDE)
@@ -350,8 +357,13 @@ fun main() {
                     window.toFront()
                 }
             }
-            MaterialTheme {
-                App()
+            val dark = Settings.darkThemeState.value
+            MaterialTheme(
+                colorScheme = if (dark) darkColorScheme(primary = Accent) else lightColorScheme(primary = Accent),
+            ) {
+                CompositionLocalProvider(LocalIsDark provides dark) {
+                    App()
+                }
             }
         }
     }
@@ -421,13 +433,13 @@ private fun LoginScreen(onLoggedIn: (Account) -> Unit) {
     val scope = rememberCoroutineScope()
 
     Column(
-        modifier = Modifier.fillMaxSize().padding(32.dp),
+        modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).padding(32.dp),
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Text("Чат", fontSize = 30.sp, fontWeight = FontWeight.Bold, color = Accent)
         Spacer(Modifier.size(4.dp))
-        Text("Windows", fontSize = 12.sp, color = Muted)
+        Text("Windows", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
         Spacer(Modifier.size(24.dp))
 
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -529,8 +541,17 @@ private fun MainScreen(
     var menuOpen by remember { mutableStateOf(false) }
     var showSettings by remember { mutableStateOf(false) }
 
-    Column(Modifier.fillMaxSize().background(Color.White)) {
-        Surface(color = Color.White, shadowElevation = 2.dp) {
+    val scope = rememberCoroutineScope()
+    var updateInfo by remember { mutableStateOf<DesktopUpdate?>(null) }
+
+    LaunchedEffect(active?.id) {
+        runCatching { withContext(Dispatchers.IO) { Updater.check() } }
+            .getOrNull()
+            ?.let { updateInfo = it }
+    }
+
+    Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surface)) {
+        Surface(color = MaterialTheme.colorScheme.surface, shadowElevation = 2.dp) {
             Row(
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp),
                 verticalAlignment = Alignment.CenterVertically,
@@ -538,7 +559,7 @@ private fun MainScreen(
                 Box {
                     Column(Modifier.clickable { menuOpen = true }) {
                         Text(active?.user?.fullName ?: "Аккаунт", fontWeight = FontWeight.SemiBold, fontSize = 16.sp)
-                        Text(active?.display ?: "", fontSize = 11.sp, color = Muted)
+                        Text(active?.display ?: "", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                     DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
                         accounts.forEach { account ->
@@ -546,7 +567,7 @@ private fun MainScreen(
                                 text = {
                                     Column {
                                         Text(account.user.fullName)
-                                        Text(account.display, fontSize = 11.sp, color = Muted)
+                                        Text(account.display, fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                     }
                                 },
                                 onClick = {
@@ -558,6 +579,22 @@ private fun MainScreen(
                         HorizontalDivider()
                         DropdownMenuItem(text = { Text("Добавить аккаунт") }, onClick = { menuOpen = false; onAddAccount() })
                         DropdownMenuItem(text = { Text("Настройки...") }, onClick = { menuOpen = false; showSettings = true })
+                        DropdownMenuItem(
+                            text = { Text("Проверить обновления") },
+                            onClick = {
+                                menuOpen = false
+                                scope.launch {
+                                    val info = withContext(Dispatchers.IO) {
+                                        runCatching { Updater.check() }.getOrNull()
+                                    }
+                                    if (info == null) {
+                                        Notifier.notify("Обновления", "У вас последняя версия")
+                                    } else {
+                                        updateInfo = info
+                                    }
+                                }
+                            },
+                        )
                         DropdownMenuItem(text = { Text("Выйти") }, onClick = { menuOpen = false; onLogout() })
                     }
                 }
@@ -581,6 +618,36 @@ private fun MainScreen(
 
     if (showSettings) {
         SettingsDialog(onClose = { showSettings = false })
+    }
+
+    val pendingUpdate = updateInfo
+    if (pendingUpdate != null) {
+        AlertDialog(
+            onDismissRequest = { updateInfo = null },
+            title = { Text("Доступно обновление ${pendingUpdate.version}") },
+            text = {
+                Column {
+                    if (!pendingUpdate.notes.isNullOrBlank()) Text(pendingUpdate.notes.orEmpty())
+                    Text("Установить сейчас?")
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    val current = pendingUpdate
+                    updateInfo = null
+                    scope.launch {
+                        runCatching {
+                            val file = withContext(Dispatchers.IO) { Updater.download(current) }
+                            Updater.install(file)
+                            exitProcess(0)
+                        }.onFailure {
+                            Notifier.notify("Обновление", "Ошибка: ${it.message}")
+                        }
+                    }
+                }) { Text("Обновить") }
+            },
+            dismissButton = { TextButton(onClick = { updateInfo = null }) { Text("Позже") } },
+        )
     }
 }
 
@@ -609,7 +676,7 @@ private fun ChatList(active: Account?, onOpen: (ChatDto) -> Unit) {
         }
     }
 
-    Box(Modifier.fillMaxSize().background(ChatBg)) {
+    Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surfaceVariant)) {
         when {
             loading && chats.isEmpty() -> CenterMsg("Загрузка...")
             error != null && chats.isEmpty() -> CenterMsg(error!!)
@@ -619,7 +686,7 @@ private fun ChatList(active: Account?, onOpen: (ChatDto) -> Unit) {
                     Row(
                         modifier = Modifier.fillMaxWidth()
                             .clickable { onOpen(chat) }
-                            .background(Color.White)
+                            .background(MaterialTheme.colorScheme.surface)
                             .padding(horizontal = 16.dp, vertical = 12.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
@@ -632,10 +699,10 @@ private fun ChatList(active: Account?, onOpen: (ChatDto) -> Unit) {
                             Text(
                                 text = chat.lastMessage?.body ?: "Нет сообщений",
                                 fontSize = 13.sp,
-                                color = Muted,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                         }
-                        Text(timeOf(chat.lastMessage?.createdAt), fontSize = 12.sp, color = Muted)
+                        Text(timeOf(chat.lastMessage?.createdAt), fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                     HorizontalDivider()
                 }
@@ -669,6 +736,13 @@ private fun ChatView(chat: ChatDto, active: Account?) {
         }
     }
 
+    DisposableEffect(chat.id) {
+        RealtimeController.activeChatId = chat.id
+        onDispose {
+            if (RealtimeController.activeChatId == chat.id) RealtimeController.activeChatId = null
+        }
+    }
+
     fun sendText() {
         val text = draft.trim()
         if (text.isEmpty()) return
@@ -698,12 +772,12 @@ private fun ChatView(chat: ChatDto, active: Account?) {
         }
     }
 
-    Column(Modifier.fillMaxSize().background(ChatBg)) {
+    Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surfaceVariant)) {
         Text(
             text = chatTitle(chat, active?.user?.id),
             fontWeight = FontWeight.SemiBold,
             fontSize = 15.sp,
-            modifier = Modifier.fillMaxWidth().background(Color.White).padding(12.dp),
+            modifier = Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surface).padding(12.dp),
         )
 
         Box(Modifier.weight(1f).fillMaxWidth()) {
@@ -721,7 +795,7 @@ private fun ChatView(chat: ChatDto, active: Account?) {
             Text(error!!, color = MaterialTheme.colorScheme.error, fontSize = 12.sp, modifier = Modifier.padding(horizontal = 12.dp))
         }
 
-        Surface(color = Color.White, shadowElevation = 4.dp) {
+        Surface(color = MaterialTheme.colorScheme.surface, shadowElevation = 4.dp) {
             Column {
                 if (showEmoji) {
                     LazyRow(Modifier.fillMaxWidth().padding(4.dp)) {
@@ -761,7 +835,7 @@ private fun MessageBubble(message: MessageDto, isOwn: Boolean) {
         Column(
             modifier = Modifier
                 .widthIn(max = 460.dp)
-                .background(if (isOwn) BubbleOut else Color.White, RoundedCornerShape(12.dp))
+                .background(if (isOwn) (if (LocalIsDark.current) Color(0xFF1F3B2A) else BubbleOut) else MaterialTheme.colorScheme.surface, RoundedCornerShape(12.dp))
                 .padding(horizontal = 10.dp, vertical = 7.dp),
         ) {
             message.files?.forEach { mf ->
@@ -790,7 +864,7 @@ private fun MessageBubble(message: MessageDto, isOwn: Boolean) {
             Text(
                 text = timeOf(message.createdAt),
                 fontSize = 10.sp,
-                color = Muted,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.align(Alignment.End),
             )
         }
@@ -800,7 +874,7 @@ private fun MessageBubble(message: MessageDto, isOwn: Boolean) {
 @Composable
 private fun CenterMsg(text: String) {
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        Text(text, color = Muted)
+        Text(text, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
 
@@ -1071,6 +1145,10 @@ private object RealtimeController {
     @Volatile
     private var activeId: String? = null
 
+    /** Chat currently open in the UI; notifications are suppressed for it. */
+    @Volatile
+    var activeChatId: Int? = null
+
     @Synchronized
     fun start(account: Account) {
         if (activeId == account.id && ws != null) return
@@ -1086,8 +1164,15 @@ private object RealtimeController {
             tokenProvider = { token },
         ).also { rt ->
             rt.onMessageEvent = { event ->
-                Notifier.notify("Чат", previewOf(event))
-                tick.value++
+                val data = runCatching { JSONObject(event.optString("data")) }.getOrNull()
+                val senderId = data?.optInt("sender_id", -1) ?: -1
+                val chatId = data?.optInt("chat_id", -1) ?: -1
+
+                // Skip own messages and the chat that is currently open.
+                if (senderId != account.user.id && chatId != activeChatId) {
+                    Notifier.notify("Чат", previewOf(event))
+                    tick.value++
+                }
             }
             rt.connect()
             rt.subscribe("private-user.${account.user.id}")
@@ -1158,7 +1243,7 @@ private fun SettingsDialog(onClose: () -> Unit) {
                     Column {
                         Text("Автозапуск при входе в Windows")
                         if (!Autostart.supported) {
-                            Text("Доступно в установленной версии", fontSize = 11.sp, color = Muted)
+                            Text("Доступно в установленной версии", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                     }
                 }
@@ -1181,6 +1266,20 @@ private fun SettingsDialog(onClose: () -> Unit) {
                     Spacer(Modifier.width(8.dp))
                     Text("Сворачивать в трей при запуске")
                 }
+                Spacer(Modifier.heightIn(min = 8.dp))
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.fillMaxWidth().clickable {
+                        Settings.setDarkTheme(!Settings.darkThemeState.value)
+                    },
+                ) {
+                    Checkbox(
+                        checked = Settings.darkThemeState.value,
+                        onCheckedChange = { v -> Settings.setDarkTheme(v) },
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Text("Тёмная тема")
+                }
             }
         },
         confirmButton = { TextButton(onClick = onClose) { Text("Готово") } },
@@ -1195,9 +1294,12 @@ private object Settings {
     var startInTray: Boolean = false
         private set
 
+    val darkThemeState = mutableStateOf(false)
+
     fun load() {
         autostart = prefs.getBoolean("autostart", false)
         startInTray = prefs.getBoolean("start_in_tray", false)
+        darkThemeState.value = prefs.getBoolean("dark_theme", false)
     }
 
     fun setAutostart(enabled: Boolean) {
@@ -1209,6 +1311,11 @@ private object Settings {
     fun setStartInTray(enabled: Boolean) {
         startInTray = enabled
         prefs.putBoolean("start_in_tray", enabled)
+    }
+
+    fun setDarkTheme(enabled: Boolean) {
+        darkThemeState.value = enabled
+        prefs.putBoolean("dark_theme", enabled)
     }
 }
 
@@ -1240,5 +1347,70 @@ private object Autostart {
                 ProcessBuilder("reg", "delete", RUN_KEY, "/v", VALUE_NAME, "/f").start().waitFor()
             }
         }
+    }
+}
+
+// ───────────────────────────── Updates ─────────────────────────────
+
+private const val APP_VERSION = "1.0.0"
+
+private data class DesktopUpdate(
+    val version: String = "",
+    val path: String = "",
+    val notes: String? = null,
+)
+
+private object Updater {
+    private val gson = Gson()
+
+    private val client = OkHttpClient.Builder()
+        .connectTimeout(10, TimeUnit.SECONDS)
+        .readTimeout(30, TimeUnit.SECONDS)
+        .build()
+
+    fun check(): DesktopUpdate? = runCatching {
+        val url = "http://${Net.host}:${Net.port}/updates/windows/latest.json"
+        val request = Request.Builder().url(url).build()
+        client.newCall(request).execute().use { response ->
+            if (!response.isSuccessful) return@use null
+            val body = response.body?.string() ?: return@use null
+            val info = gson.fromJson(body, DesktopUpdate::class.java)
+            if (info != null && isNewer(info.version)) info else null
+        }
+    }.getOrNull()
+
+    fun download(info: DesktopUpdate): File {
+        val url = "http://${Net.host}:${Net.port}${info.path}"
+        val request = Request.Builder().url(url).build()
+        val dir = File(System.getProperty("java.io.tmpdir"), "tasksbase-update").apply { mkdirs() }
+        val name = info.path.substringAfterLast('/').ifBlank { "update.msi" }
+        val target = File(dir, name)
+
+        client.newCall(request).execute().use { response ->
+            if (!response.isSuccessful) error("HTTP ${response.code}")
+            val body = response.body ?: error("Пустой ответ")
+            body.byteStream().use { input ->
+                target.outputStream().use { output -> input.copyTo(output) }
+            }
+        }
+
+        return target
+    }
+
+    fun install(file: File) {
+        ProcessBuilder("msiexec", "/i", file.absolutePath).start()
+    }
+
+    private fun isNewer(remote: String): Boolean {
+        if (remote.isBlank()) return false
+        val current = APP_VERSION.split('.').map { it.toIntOrNull() ?: 0 }
+        val candidate = remote.split('.').map { it.toIntOrNull() ?: 0 }
+        for (i in 0 until maxOf(current.size, candidate.size)) {
+            val a = current.getOrElse(i) { 0 }
+            val b = candidate.getOrElse(i) { 0 }
+            if (b > a) return true
+            if (b < a) return false
+        }
+        return false
     }
 }

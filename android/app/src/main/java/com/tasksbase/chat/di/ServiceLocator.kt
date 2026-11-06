@@ -6,6 +6,7 @@ import com.tasksbase.chat.BuildConfig
 import com.tasksbase.chat.data.local.Account
 import com.tasksbase.chat.data.local.AccountStore
 import com.tasksbase.chat.data.local.ServerConfig
+import com.tasksbase.chat.data.local.SettingsStore
 import com.tasksbase.chat.data.remote.ApiService
 import com.tasksbase.chat.data.remote.AuthInterceptor
 import com.tasksbase.chat.data.remote.ServerAddressInterceptor
@@ -31,9 +32,14 @@ object ServiceLocator {
     /** Emits the currently active account (used to re-key the UI on switch). */
     val activeAccountFlow = MutableStateFlow<Account?>(null)
 
+    /** Dark theme flag (persisted in SettingsStore). */
+    val darkThemeFlow = MutableStateFlow(false)
+
     val gson: Gson by lazy { Gson() }
 
     val accountStore: AccountStore by lazy { AccountStore(appContext) }
+
+    val settingsStore: SettingsStore by lazy { SettingsStore(appContext) }
 
     @Volatile
     var accounts: List<Account> = emptyList()
@@ -82,6 +88,16 @@ object ServiceLocator {
         accounts = list
         val active = list.firstOrNull { it.id == activeId } ?: list.firstOrNull()
         applyActive(active)
+    }
+
+    /** Loads persisted UI settings (theme). */
+    suspend fun loadSettings() {
+        darkThemeFlow.value = settingsStore.loadDarkTheme()
+    }
+
+    suspend fun updateDarkTheme(enabled: Boolean) {
+        darkThemeFlow.value = enabled
+        settingsStore.saveDarkTheme(enabled)
     }
 
     private fun applyActive(account: Account?) {

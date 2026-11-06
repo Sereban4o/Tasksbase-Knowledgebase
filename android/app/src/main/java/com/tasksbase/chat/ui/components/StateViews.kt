@@ -22,7 +22,7 @@ fun CenterProgress(modifier: Modifier = Modifier) {
 @Composable
 fun CenterText(text: String, modifier: Modifier = Modifier) {
     Box(modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        Text(text, color = TgSecondary, textAlign = TextAlign.Center)
+        Text(text, color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Center)
     }
 }
 

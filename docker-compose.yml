@@ -55,6 +55,7 @@ services:
     volumes:
       - ./backend:/var/www/html
       - ./nginx/conf.d:/etc/nginx/conf.d
+      - ./updates:/var/www/updates:ro
     depends_on:
       - app
 

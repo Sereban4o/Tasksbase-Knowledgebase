@@ -1,5 +1,6 @@
 package com.tasksbase.chat.ui.chat
 
+import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -15,6 +16,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -23,10 +25,12 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -34,18 +38,22 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.tasksbase.chat.data.remote.ChatDto
 import com.tasksbase.chat.data.remote.UserDto
+import com.tasksbase.chat.data.remote.UpdateInfo
+import com.tasksbase.chat.data.remote.UpdateManager
 import com.tasksbase.chat.di.ServiceLocator
 import com.tasksbase.chat.notifications.RealtimeService
 import com.tasksbase.chat.ui.components.CenterError
 import com.tasksbase.chat.ui.components.CenterProgress
 import com.tasksbase.chat.ui.components.CenterText
 import com.tasksbase.chat.ui.components.LetterAvatar
+import com.tasksbase.chat.ui.theme.LocalChatPalette
 import com.tasksbase.chat.ui.theme.TgAccent
 import com.tasksbase.chat.ui.theme.TgChatBg
 import com.tasksbase.chat.ui.theme.TgSecondary
@@ -76,6 +84,15 @@ fun ChatListScreen(
     var accountMenu by remember { mutableStateOf(false) }
 
     val active = ServiceLocator.activeAccount
+
+    val dark by ServiceLocator.darkThemeFlow.collectAsState()
+
+    val context = LocalContext.current
+    var updateInfo by remember { mutableStateOf<UpdateInfo?>(null) }
+
+    LaunchedEffect(Unit) {
+        runCatching { UpdateManager.check() }.getOrNull()?.let { updateInfo = it }
+    }
 
     LaunchedEffect(Unit) {
         while (isActive) {
@@ -114,7 +131,7 @@ fun ChatListScreen(
                             Text(
                                 text = active?.display ?: "Выберите сервер",
                                 fontSize = 11.sp,
-                                color = TgSecondary,
+                                color = LocalChatPalette.current.secondary,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis,
                             )
@@ -132,7 +149,7 @@ fun ChatListScreen(
                                             Text(
                                                 text = account.display,
                                                 fontSize = 11.sp,
-                                                color = TgSecondary,
+                                                color = LocalChatPalette.current.secondary,
                                             )
                                         }
                                     },
@@ -157,6 +174,27 @@ fun ChatListScreen(
                                 },
                             )
                             DropdownMenuItem(
+                                text = { Text(if (dark) "Светлая тема" else "Тёмная тема") },
+                                onClick = {
+                                    accountMenu = false
+                                    scope.launch { ServiceLocator.updateDarkTheme(!dark) }
+                                },
+                            )
+                            DropdownMenuItem(
+                                text = { Text("Проверить обновления") },
+                                onClick = {
+                                    accountMenu = false
+                                    scope.launch {
+                                        val info = runCatching { UpdateManager.check() }.getOrNull()
+                                        if (info == null) {
+                                            Toast.makeText(context, "Обновлений нет", Toast.LENGTH_SHORT).show()
+                                        } else {
+                                            updateInfo = info
+                                        }
+                                    }
+                                },
+                            )
+                            DropdownMenuItem(
                                 text = { Text("Выйти") },
                                 onClick = {
                                     accountMenu = false
@@ -170,7 +208,7 @@ fun ChatListScreen(
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = androidx.compose.ui.graphics.Color.White,
+                    containerColor = LocalChatPalette.current.surface,
                 ),
                 actions = {
                     IconButton(onClick = { showCreate = true }) {
@@ -184,7 +222,7 @@ fun ChatListScreen(
             Modifier
                 .padding(padding)
                 .fillMaxSize()
-                .background(TgChatBg),
+                .background(LocalChatPalette.current.chatBg),
         ) {
             when {
                 loading && chats.isEmpty() -> CenterProgress()
@@ -197,6 +235,36 @@ fun ChatListScreen(
                 }
             }
         }
+    }
+
+    val pendingUpdate = updateInfo
+    if (pendingUpdate != null) {
+        AlertDialog(
+            onDismissRequest = { updateInfo = null },
+            title = { Text("Доступно обновление ${pendingUpdate.version}") },
+            text = {
+                Column {
+                    if (!pendingUpdate.notes.isNullOrBlank()) {
+                        Text(pendingUpdate.notes.orEmpty())
+                    }
+                    Text("Установить сейчас?", fontSize = 13.sp)
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    val current = pendingUpdate
+                    updateInfo = null
+                    scope.launch {
+                        UpdateManager.downloadAndInstall(context, current).onFailure {
+                            Toast.makeText(context, "Ошибка обновления: ${it.message}", Toast.LENGTH_LONG).show()
+                        }
+                    }
+                }) { Text("Обновить") }
+            },
+            dismissButton = {
+                TextButton(onClick = { updateInfo = null }) { Text("Позже") }
+            },
+        )
     }
 
     if (showCreate) {
@@ -221,7 +289,7 @@ private fun ChatListRow(chat: ChatDto, onClick: () -> Unit) {
         modifier = Modifier
             .fillMaxWidth()
             .clickable(onClick = onClick)
-            .background(androidx.compose.ui.graphics.Color.White)
+            .background(LocalChatPalette.current.surface)
             .padding(horizontal = 12.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -248,14 +316,14 @@ private fun ChatListRow(chat: ChatDto, onClick: () -> Unit) {
                 Text(
                     text = formatListTime(chat.lastMessage?.createdAt ?: chat.createdAt),
                     fontSize = 12.sp,
-                    color = TgSecondary,
+                    color = LocalChatPalette.current.secondary,
                 )
             }
             Spacer(Modifier.width(2.dp))
             Text(
                 text = chatPreview(chat),
                 fontSize = 13.sp,
-                color = TgSecondary,
+                color = LocalChatPalette.current.secondary,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )

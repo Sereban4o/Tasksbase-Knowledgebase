@@ -94,6 +94,8 @@ services:
     ports:
       - "80:80"
       # - "443:443"   # enable together with TLS certs
+    volumes:
+      - ./updates:/var/www/updates:ro
     depends_on:
       - app
       - reverb

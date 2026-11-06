@@ -1,0 +1,7 @@
+{
+  "platform": "android",
+  "version": "1.0.0",
+  "versionCode": 1,
+  "path": "/updates/android/app-debug.apk",
+  "notes": "Текущая версия"
+}

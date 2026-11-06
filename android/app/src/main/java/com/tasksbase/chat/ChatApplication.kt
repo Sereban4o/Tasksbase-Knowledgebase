@@ -14,6 +14,7 @@ class ChatApplication : Application() {
 
         CoroutineScope(Dispatchers.IO).launch {
             ServiceLocator.loadAccounts()
+            ServiceLocator.loadSettings()
             ServiceLocator.sessionReady.value = true
 
             if (ServiceLocator.activeAccount != null) {

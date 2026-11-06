@@ -26,6 +26,7 @@ compose.desktop {
         mainClass = "com.tasksbase.chat.desktop.MainKt"
 
         nativeDistributions {
+            modules("jdk.unsupported")
             targetFormats(TargetFormat.Msi, TargetFormat.Exe)
             packageName = "TasksbaseChat"
             packageVersion = "1.0.0"

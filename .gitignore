@@ -28,6 +28,7 @@ dist/
 build/
 *.apk
 *.aab
+*.msi
 backend/public/build/
 backend/public/hot/
 backend/public/storage

@@ -72,6 +72,7 @@ import com.tasksbase.chat.ui.components.CenterError
 import com.tasksbase.chat.ui.components.CenterProgress
 import com.tasksbase.chat.ui.components.CenterText
 import com.tasksbase.chat.ui.components.LetterAvatar
+import com.tasksbase.chat.ui.theme.LocalChatPalette
 import com.tasksbase.chat.ui.theme.TgAccent
 import com.tasksbase.chat.ui.theme.TgChatBg
 import com.tasksbase.chat.ui.theme.TgOutgoing
@@ -199,11 +200,11 @@ fun ChatScreen(chat: ChatDto, onBack: () -> Unit) {
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis,
                             )
-                            Text(text = chatSubtitle(chat), fontSize = 12.sp, color = TgSecondary)
+                            Text(text = chatSubtitle(chat), fontSize = 12.sp, color = LocalChatPalette.current.secondary)
                         }
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.White),
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = LocalChatPalette.current.surface),
             )
         },
     ) { padding ->
@@ -211,7 +212,7 @@ fun ChatScreen(chat: ChatDto, onBack: () -> Unit) {
             modifier = Modifier
                 .padding(padding)
                 .fillMaxSize()
-                .background(TgChatBg),
+                .background(LocalChatPalette.current.chatBg),
         ) {
             Box(Modifier.weight(1f).fillMaxWidth()) {
                 when {
@@ -233,7 +234,7 @@ fun ChatScreen(chat: ChatDto, onBack: () -> Unit) {
                 }
             }
 
-            Surface(color = Color.White, shadowElevation = 6.dp) {
+            Surface(color = LocalChatPalette.current.surface, shadowElevation = 6.dp) {
                 Column {
                     if (showEmoji) {
                         EmojiPanel { emoji -> draft += emoji }
@@ -289,7 +290,7 @@ fun ChatScreen(chat: ChatDto, onBack: () -> Unit) {
 private fun EmojiPanel(onPick: (String) -> Unit) {
     LazyVerticalGrid(
         columns = GridCells.Fixed(8),
-        modifier = Modifier.fillMaxWidth().height(180.dp).background(Color.White).padding(4.dp),
+        modifier = Modifier.fillMaxWidth().height(180.dp).background(LocalChatPalette.current.surface).padding(4.dp),
     ) {
         items(EMOJI_SET.size) { index ->
             TextButton(onClick = { onPick(EMOJI_SET[index]) }, modifier = Modifier.height(40.dp)) {
@@ -314,7 +315,7 @@ private fun MessageBubble(message: MessageDto, isOwn: Boolean, imageLoader: Imag
             modifier = Modifier
                 .widthIn(max = 290.dp)
                 .clip(RoundedCornerShape(12.dp))
-                .background(if (isOwn) TgOutgoing else Color.White)
+                .background(if (isOwn) LocalChatPalette.current.outgoing else LocalChatPalette.current.surface)
                 .padding(horizontal = 10.dp, vertical = 7.dp),
         ) {
             message.files?.forEach { mf ->
@@ -342,12 +343,12 @@ private fun MessageBubble(message: MessageDto, isOwn: Boolean, imageLoader: Imag
             }
 
             if (!message.body.isNullOrBlank()) {
-                Text(text = message.body, color = TgText, fontSize = 15.sp)
+                Text(text = message.body, color = LocalChatPalette.current.text, fontSize = 15.sp)
             }
             Text(
                 text = formatMessageTime(message.createdAt),
                 fontSize = 10.sp,
-                color = TgSecondary,
+                color = LocalChatPalette.current.secondary,
                 modifier = Modifier.align(Alignment.End),
             )
         }

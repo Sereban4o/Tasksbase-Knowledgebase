@@ -465,6 +465,53 @@ gradle -p android :desktop:packageMsi
 
 ---
 
+## Шаг 15. Сервер обновлений (самообновление приложений)
+
+Обновления отдаёт nginx из каталога `./updates` (монтируется в контейнер как `/var/www/updates`, публичный порт 80).
+
+Структура:
+```
+updates/
+  android/latest.json  +  <файл>.apk
+  windows/latest.json  +  <файл>.msi
+```
+
+Манифест `latest.json`:
+```json
+{ "version": "1.0.1", "versionCode": 2, "path": "/updates/android/app-release.apk", "notes": "Что нового", "sha256": "..." }
+```
+
+Эндпоинты (через nginx):
+- `GET /updates/android/latest.json`, `GET /updates/android/<file>.apk`
+- `GET /updates/windows/latest.json`, `GET /updates/windows/<file>.msi`
+
+### 15.1 Публикация новой версии
+
+```powershell
+# Android
+.\scripts\publish_update.ps1 -Platform android -File .\app-release.apk -Version 1.0.1 -VersionCode 2 -Notes "Fixes"
+
+# Windows
+.\scripts\publish_update.ps1 -Platform windows -File .\TasksbaseChat-1.0.1.msi -Version 1.0.1 -Notes "Fixes"
+```
+
+Скрипт копирует файл в `updates/<platform>/`, считает SHA-256 и обновляет `latest.json`. Пересборка nginx не нужна — файлы видны сразу (bind-mount).
+
+### 15.2 Как работают приложения
+
+- При запуске и по пункту меню **«Проверить обновления»** приложение опрашивает `/updates/<platform>/latest.json` на своём сервере.
+- Если версия новее — предлагает обновление:
+  - **Android**: скачивает APK и запускает системный установщик (нужно разрешение «Установка из неизвестных источников» для приложения).
+  - **Windows**: скачивает MSI и запускает `msiexec /i` (приложение закрывается, затем установщик обновляет файлы).
+
+> Где менять версию:
+> - Android: `versionCode` / `versionName` в `android/app/build.gradle.kts`;
+> - Windows: `APP_VERSION` в `Main.kt` и `packageVersion` в `android/desktop/build.gradle.kts`.
+>
+> URL обновлений берётся с того же сервера, что и активный аккаунт (`http://<server>/updates/...`), поэтому для разных серверов — свои обновления.
+
+---
+
 ## Быстрая шпаргалка
 
 **Релиз (локально):**```bash

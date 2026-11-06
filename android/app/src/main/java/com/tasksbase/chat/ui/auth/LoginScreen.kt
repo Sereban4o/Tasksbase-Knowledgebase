@@ -1,5 +1,6 @@
 package com.tasksbase.chat.ui.auth
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -89,6 +90,7 @@ fun LoginScreen(onLoggedIn: () -> Unit) {
     Column(
         modifier = Modifier
             .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background)
             .padding(24.dp),
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -100,7 +102,7 @@ fun LoginScreen(onLoggedIn: () -> Unit) {
                 "Сервер: ${normalizeHost(host)}:$port" +
                     if (ntfyHost.isNotBlank()) "  ·  ntfy: ${normalizeHost(ntfyHost)}:$ntfyPort" else "",
                 fontSize = 12.sp,
-                color = TgSecondary,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
         Spacer(Modifier.height(18.dp))
@@ -255,7 +257,7 @@ private fun ServerSettingsDialog(
                 Text(
                     "Например: сервер 212.109.16.56:80, ntfy 212.109.16.56:8081",
                     fontSize = 11.sp,
-                    color = TgSecondary,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
         },

@@ -7,7 +7,10 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.core.content.ContextCompat
+import com.tasksbase.chat.di.ServiceLocator
 import com.tasksbase.chat.ui.AppRoot
 import com.tasksbase.chat.ui.theme.TasksbaseChatTheme
 
@@ -22,7 +25,8 @@ class MainActivity : ComponentActivity() {
         askNotificationPermission()
 
         setContent {
-            TasksbaseChatTheme {
+            val dark by ServiceLocator.darkThemeFlow.collectAsState()
+            TasksbaseChatTheme(dark = dark) {
                 AppRoot()
             }
         }

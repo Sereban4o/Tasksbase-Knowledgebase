@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Casts\EncryptedOrPlain;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
@@ -16,7 +17,7 @@ class Message extends Model
     ];
 
     protected $casts = [
-        'body' => 'encrypted',
+        'body' => EncryptedOrPlain::class,
         'metadata' => 'array',
         'edited_at' => 'datetime',
         'deleted_at' => 'datetime',

@@ -160,7 +160,9 @@ Route::prefix('v1')->group(function () {
             // Chats
             Route::get('/my', [ChatController::class, 'myChats']);
             Route::get('/search-users', [ChatController::class, 'searchUsers']);
-            Route::apiResource('/', ChatController::class)->except(['update', 'destroy']);
+            Route::get('/', [ChatController::class, 'index']);
+            Route::post('/', [ChatController::class, 'store']);
+            Route::get('/{chat}', [ChatController::class, 'show'])->whereNumber('chat');
             Route::patch('/{chat}', [ChatController::class, 'update']);
             Route::delete('/{chat}', [ChatController::class, 'destroy']);
             

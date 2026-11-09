@@ -24,6 +24,7 @@ COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
 # PHP-FPM + OPcache config
 COPY docker.conf /usr/local/etc/php-fpm.d/docker.conf
 COPY docker/opcache.ini /usr/local/etc/php/conf.d/zz-opcache.ini
+COPY docker/uploads.ini /usr/local/etc/php/conf.d/zz-uploads.ini
 
 WORKDIR /var/www/html
 

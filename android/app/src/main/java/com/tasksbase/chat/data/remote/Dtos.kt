@@ -2,12 +2,21 @@ package com.tasksbase.chat.data.remote
 
 import com.google.gson.annotations.SerializedName
 
+data class PivotDto(
+    @SerializedName("chat_id") val chatId: Int = 0,
+    @SerializedName("user_id") val userId: Int = 0,
+    val role: String = "member",
+    @SerializedName("last_read_at") val lastReadAt: String? = null,
+)
+
 data class UserDto(
     val id: Int = 0,
     val email: String? = null,
     @SerializedName("first_name") val firstName: String? = null,
     @SerializedName("last_name") val lastName: String? = null,
     val avatar: String? = null,
+    val status: String? = null,
+    val pivot: PivotDto? = null,
 ) {
     val fullName: String
         get() = listOfNotNull(firstName, lastName)
@@ -91,6 +100,19 @@ data class CreateChatRequest(
     val name: String?,
     val description: String?,
     @SerializedName("user_ids") val userIds: List<Int>,
+)
+
+data class UpdateChatRequest(
+    val name: String? = null,
+    val description: String? = null,
+)
+
+data class AddMembersRequest(
+    @SerializedName("user_ids") val userIds: List<Int>,
+)
+
+data class RemoveMemberRequest(
+    @SerializedName("user_id") val userId: Int,
 )
 
 data class SendMessageRequest(

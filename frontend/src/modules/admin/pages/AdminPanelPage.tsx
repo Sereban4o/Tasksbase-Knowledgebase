@@ -1,5 +1,9 @@
 import { Box, Typography, Button, Grid, Card, CardContent, CardHeader } from '@mui/material'
-import { ArrowBack as ArrowBackIcon, Chat as ChatIcon, People as PeopleIcon } from '@mui/icons-material'
+import {
+  ArrowBack as ArrowBackIcon,
+  Chat as ChatIcon,
+  People as PeopleIcon,
+} from '@mui/icons-material'
 import { useNavigate } from 'react-router-dom'
 import { useState } from 'react'
 import AdminChatManagement from '@/modules/admin/components/AdminChatManagement'
@@ -109,14 +113,15 @@ export default function AdminPanelPage() {
       </Grid>
       
       <Typography variant="body1" sx={{ mb: 3, mt: 3 }}>
-        Переход к Laravel Admin Panel...
+        Переход к Laravel Admin Panel (требуется вход в веб-админку)...
       </Typography>
       
       <Button
         variant="contained"
         size="large"
         onClick={() => {
-          window.location.href = `http://localhost:8000/admin?token=${localStorage.getItem('auth_token')}`
+          // Same-origin navigation; the Laravel admin uses a session (no token in URL).
+          window.location.href = '/admin'
         }}
       >
         Открыть Admin Panel

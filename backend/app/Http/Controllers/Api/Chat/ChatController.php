@@ -19,7 +19,7 @@ class ChatController extends Controller
         $chats = Chat::whereHas('members', function ($q) use ($user) {
             $q->where('user_id', $user->id);
         })
-        ->with(['lastMessage.sender:id,first_name,last_name,avatar', 'creator:id,first_name,last_name,avatar', 'members:id,first_name,last_name,avatar'])
+        ->with(['lastMessage.sender:id,first_name,last_name,avatar', 'creator:id,first_name,last_name,avatar', 'members:id,first_name,last_name,avatar,email,status'])
         ->withCount(['messages as messages_count' => function ($q) {
             $q->whereNull('deleted_at');
         }])
@@ -37,7 +37,7 @@ class ChatController extends Controller
         $chats = Chat::whereHas('members', function ($q) use ($user) {
             $q->where('user_id', $user->id);
         })
-        ->with(['lastMessage.sender:id,first_name,last_name,avatar', 'creator:id,first_name,last_name,avatar', 'members:id,first_name,last_name,avatar'])
+        ->with(['lastMessage.sender:id,first_name,last_name,avatar', 'creator:id,first_name,last_name,avatar', 'members:id,first_name,last_name,avatar,email,status'])
         ->withCount(['messages as messages_count' => function ($q) {
             $q->whereNull('deleted_at');
         }])
@@ -61,20 +61,28 @@ class ChatController extends Controller
 
         if ($validated['type'] === 'dm') {
             $validated['name'] = null;
-            $otherUserId = $validated['user_ids'][0] ?? null;
-            
-            if (!$otherUserId) {
-                return response()->json(['message' => 'Необходимо указать пользователя'], 422);
+            $userIds = $validated['user_ids'] ?? [];
+
+            if (count($userIds) !== 1) {
+                return response()->json(['message' => 'Необходимо указать ровно одного пользователя'], 422);
             }
 
-            // Check if chat already exists
+            $otherUserId = (int) $userIds[0];
+
+            if ($otherUserId === (int) $user->id) {
+                return response()->json(['message' => 'Нельзя создать чат с самим собой'], 422);
+            }
+
+            // Reuse only a DM that has exactly two members (guards against historical broken DMs).
             $existingChat = Chat::where('type', 'dm')
+                ->has('members', '=', 2)
                 ->whereHas('members', function ($q) use ($otherUserId) {
                     $q->where('user_id', $otherUserId);
                 })
                 ->whereHas('members', function ($q) use ($user) {
                     $q->where('user_id', $user->id);
                 })
+                ->orderBy('id')
                 ->first();
 
             if ($existingChat) {
@@ -115,7 +123,7 @@ class ChatController extends Controller
             return $chat;
         });
 
-        return response()->json($chat->load(['lastMessage.sender:id,first_name,last_name,avatar', 'members:id,first_name,last_name,avatar']), 201);
+        return response()->json($chat->load(['lastMessage.sender:id,first_name,last_name,avatar', 'members:id,first_name,last_name,avatar,email,status']), 201);
     }
 
     public function show(Chat $chat)
@@ -123,7 +131,7 @@ class ChatController extends Controller
         $this->ensureUserIsMember($chat);
 
         return response()->json($chat->load([
-            'members:id,first_name,last_name,avatar',
+            'members:id,first_name,last_name,avatar,email,status',
             'lastMessage.sender:id,first_name,last_name,avatar',
             'creator:id,first_name,last_name,avatar',
         ]));
@@ -146,8 +154,18 @@ class ChatController extends Controller
 
     public function destroy(Chat $chat)
     {
-        $this->ensureUserIsAdmin($chat);
-        $chat->delete();
+        $this->ensureUserIsMember($chat);
+
+        $memberIds = $chat->members()->pluck('users.id')->all();
+        $type = $chat->type;
+        $name = $chat->name;
+
+        DB::transaction(function () use ($chat) {
+            $chat->members()->detach();
+            $chat->delete();
+        });
+
+        event(new \App\Events\ChatDeleted((int) $chat->id, $type, $name, $memberIds));
 
         return response()->json(['message' => 'Чат удалён']);
     }
@@ -170,7 +188,7 @@ class ChatController extends Controller
             }
         });
 
-        return response()->json($chat->load('members'));
+        return response()->json($chat->load('members:id,first_name,last_name,avatar,email,status'));
     }
 
     public function removeMember(Request $request, Chat $chat)
@@ -186,6 +204,29 @@ class ChatController extends Controller
             ->delete();
 
         return response()->json(['message' => 'Участник удалён']);
+    }
+
+    public function leaveChat(Chat $chat)
+    {
+        $userId = Auth::id();
+        $member = $chat->members()->where('user_id', $userId)->first();
+
+        if (!$member) {
+            abort(403, 'Вы не являетесь участником этого чата');
+        }
+
+        $wasAdmin = $member->pivot->role === 'admin';
+        $chat->members()->detach($userId);
+
+        // Передать админство, чтобы группа не осталась без администратора.
+        if ($wasAdmin && $chat->type !== 'dm') {
+            $next = $chat->members()->oldest('chat_members.created_at')->first();
+            if ($next) {
+                $chat->members()->updateExistingPivot($next->id, ['role' => 'admin']);
+            }
+        }
+
+        return response()->json(['message' => 'Вы покинули чат']);
     }
 
     public function markAsRead(Chat $chat)

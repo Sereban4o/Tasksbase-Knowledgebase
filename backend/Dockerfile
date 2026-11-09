@@ -24,6 +24,7 @@ COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
 
 # PHP-FPM config for Docker
 COPY docker.conf /usr/local/etc/php-fpm.d/docker.conf
+COPY docker/uploads.ini /usr/local/etc/php/conf.d/zz-uploads.ini
 
 # Create working directory
 WORKDIR /var/www/html

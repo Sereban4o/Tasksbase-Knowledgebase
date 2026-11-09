@@ -5,6 +5,7 @@ import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -66,8 +67,11 @@ import coil.decode.ImageDecoderDecoder
 import com.tasksbase.chat.BuildConfig
 import com.tasksbase.chat.data.remote.ChatDto
 import com.tasksbase.chat.data.remote.MessageDto
+import com.tasksbase.chat.data.remote.UserDto
 import com.tasksbase.chat.di.ServiceLocator
 import com.tasksbase.chat.di.Session
+import com.tasksbase.chat.ui.components.ChatAvatar
+import com.tasksbase.chat.ui.components.chatAvatarUrl
 import com.tasksbase.chat.ui.components.CenterError
 import com.tasksbase.chat.ui.components.CenterProgress
 import com.tasksbase.chat.ui.components.CenterText
@@ -110,6 +114,8 @@ fun ChatScreen(chat: ChatDto, onBack: () -> Unit) {
     var refreshKey by remember { mutableIntStateOf(0) }
     var attaching by remember { mutableStateOf(false) }
     var showEmoji by remember { mutableStateOf(false) }
+    var showInfo by remember { mutableStateOf(false) }
+    var users by remember { mutableStateOf<List<UserDto>>(emptyList()) }
 
     // Coil loader with GIF support (coil-gif)
     val imageLoader = remember {
@@ -168,11 +174,23 @@ fun ChatScreen(chat: ChatDto, onBack: () -> Unit) {
         Session.activeChatId = chat.id
         val realtime = ServiceLocator.newRealtime()
         realtime.onMessageEvent = { refreshKey++ }
+        realtime.onChatDeleted = { deletedId ->
+            if (deletedId == chat.id) {
+                Session.bumpChatList()
+                onBack()
+            }
+        }
         realtime.connect()
         realtime.subscribe("private-chat.${chat.id}")
         onDispose {
             Session.activeChatId = null
             realtime.close()
+        }
+    }
+
+    LaunchedEffect(showInfo) {
+        if (showInfo && users.isEmpty()) {
+            runCatching { ServiceLocator.chatRepository.users() }.onSuccess { users = it }
         }
     }
 
@@ -186,10 +204,12 @@ fun ChatScreen(chat: ChatDto, onBack: () -> Unit) {
                 },
                 title = {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        LetterAvatar(
-                            text = chatAvatarText(chat, myId),
+                        ChatAvatar(
+                            avatarUrl = chatAvatarUrl(chat, myId),
+                            fallbackText = chatAvatarText(chat, myId),
                             color = avatarColorFor(chatAvatarOwnerId(chat, myId)),
                             size = 36.dp,
+                            modifier = Modifier.clickable { showInfo = true },
                         )
                         Spacer(Modifier.width(10.dp))
                         Column {
@@ -208,6 +228,19 @@ fun ChatScreen(chat: ChatDto, onBack: () -> Unit) {
             )
         },
     ) { padding ->
+        if (showInfo) {
+            ChatInfoDialog(
+                chat = chat,
+                myId = myId,
+                users = users,
+                onDismiss = { showInfo = false },
+                onChanged = {
+                    showInfo = false
+                    Session.bumpChatList()
+                    onBack()
+                },
+            )
+        }
         Column(
             modifier = Modifier
                 .padding(padding)

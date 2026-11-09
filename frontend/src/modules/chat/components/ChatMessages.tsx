@@ -8,12 +8,19 @@ import apiClient from '@/modules/shared/api/apiClient'
 import { unwrapList } from '@/modules/shared/utils/apiResponse'
 import { useAuth } from '@/modules/auth/store/authStore'
 import { getInitials, getUserAvatarColor } from '../utils'
+import ChatAvatar from './ChatAvatar'
 import { playNotificationSound } from '../realtime'
 import { tg } from '../theme'
 import type { Message } from '../types'
 
 interface ChatMessagesProps {
   chatId: number
+  onAvatarClick?: (sender: {
+    id: number
+    first_name?: string
+    last_name?: string
+    avatar?: string | null
+  }) => void
 }
 
 interface MessageGroup {
@@ -35,7 +42,7 @@ function dayLabel(dateStr: string): string {
   return format(date, 'd MMMM', { locale: ru })
 }
 
-function ChatMessages({ chatId }: ChatMessagesProps) {
+function ChatMessages({ chatId, onAvatarClick }: ChatMessagesProps) {
   const bottomRef = useRef<HTMLDivElement>(null)
   const lastMessageIdRef = useRef<number>(0)
   const { user } = useAuth()
@@ -247,32 +254,23 @@ function ChatMessages({ chatId }: ChatMessagesProps) {
                 >
                   {!group.isOwn && (
                     <Box sx={{ width: 34, flexShrink: 0 }}>
-                      {isLast &&
-                        (group.sender?.avatar ? (
-                          <Box
-                            component="img"
-                            src={group.sender.avatar}
-                            alt=""
-                            sx={{ width: 34, height: 34, borderRadius: '50%', objectFit: 'cover' }}
-                          />
-                        ) : (
-                          <Box
-                            sx={{
-                              width: 34,
-                              height: 34,
-                              borderRadius: '50%',
-                              bgcolor: avatarColor,
-                              color: '#fff',
-                              fontSize: '0.8rem',
-                              fontWeight: 600,
-                              display: 'flex',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                            }}
-                          >
-                            {initials || '?'}
-                          </Box>
-                        ))}
+                      {isLast && (
+                        <ChatAvatar
+                          src={group.sender?.avatar}
+                          initials={initials || '?'}
+                          color={avatarColor}
+                          size={34}
+                          label={senderName}
+                          onClick={() =>
+                            onAvatarClick?.({
+                              id: senderId,
+                              first_name: group.sender?.first_name,
+                              last_name: group.sender?.last_name,
+                              avatar: group.sender?.avatar,
+                            })
+                          }
+                        />
+                      )}
                     </Box>
                   )}
 

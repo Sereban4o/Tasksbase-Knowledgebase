@@ -2,6 +2,7 @@ package com.tasksbase.chat.di
 
 import com.tasksbase.chat.data.local.Account
 import com.tasksbase.chat.data.remote.UserDto
+import kotlinx.coroutines.flow.MutableStateFlow
 
 /** In-memory session shared across the app. Persistence lives in AccountStore. */
 object Session {
@@ -19,10 +20,18 @@ object Session {
     @Volatile
     var activeChatId: Int? = null
 
+    /** Bumped whenever the chat list must be reloaded (e.g. a chat was deleted). */
+    val chatListVersion = MutableStateFlow(0)
+
+    fun bumpChatList() {
+        chatListVersion.value += 1
+    }
+
     fun reset() {
         token = null
         currentUser = null
         activeAccount = null
         activeChatId = null
+        bumpChatList()
     }
 }

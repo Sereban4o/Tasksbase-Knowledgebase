@@ -34,7 +34,10 @@ $manifest = [ordered]@{
 }
 
 $json = $manifest | ConvertTo-Json
-Set-Content -Path (Join-Path $dir 'latest.json') -Value $json -Encoding UTF8
+# Write UTF-8 WITHOUT BOM (BOM breaks strict JSON parsers in the clients).
+$latestPath = Join-Path $dir 'latest.json'
+$utf8NoBom = New-Object System.Text.UTF8Encoding($false)
+[System.IO.File]::WriteAllText($latestPath, $json, $utf8NoBom)
 
 Write-Host "Published $Platform $Version -> $dest"
 Write-Host "Manifest: updates/$Platform/latest.json"

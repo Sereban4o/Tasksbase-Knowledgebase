@@ -3,6 +3,8 @@ package com.tasksbase.chat.desktop
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -18,6 +20,7 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.AlertDialog
@@ -49,7 +52,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.toComposeImageBitmap
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -74,7 +80,9 @@ import org.jetbrains.skia.Image as SkiaImage
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
 import retrofit2.http.Body
+import retrofit2.http.DELETE
 import retrofit2.http.GET
+import retrofit2.http.PATCH
 import retrofit2.http.POST
 import retrofit2.http.Path
 import retrofit2.http.Query
@@ -104,15 +112,27 @@ import java.awt.image.BufferedImage
 
 // ───────────────────────────── DTOs ─────────────────────────────
 
+data class PivotDto(
+    val role: String = "member",
+    @SerializedName("last_read_at") val lastReadAt: String? = null,
+)
+
 data class UserDto(
     val id: Int = 0,
     val email: String? = null,
     @SerializedName("first_name") val firstName: String? = null,
     @SerializedName("last_name") val lastName: String? = null,
+    val avatar: String? = null,
+    val status: String? = null,
+    val pivot: PivotDto? = null,
 ) {
     val fullName: String
         get() = listOfNotNull(firstName, lastName).joinToString(" ").trim()
             .ifBlank { email ?: "Пользователь" }
+
+    val initials: String
+        get() = listOfNotNull(firstName?.firstOrNull(), lastName?.firstOrNull())
+            .joinToString("").uppercase().ifBlank { "?" }
 }
 
 data class FileDto(
@@ -145,8 +165,11 @@ data class MessageDto(
 
 data class ChatDto(
     val id: Int = 0,
+    @SerializedName("created_by") val createdBy: Int = 0,
     val name: String? = null,
     val type: String = "dm",
+    val avatar: String? = null,
+    val description: String? = null,
     val members: List<UserDto>? = null,
     @SerializedName("last_message") val lastMessage: MessageDto? = null,
 )
@@ -169,6 +192,19 @@ data class CreateChatRequest(
     @SerializedName("user_ids") val userIds: List<Int> = emptyList(),
 )
 
+data class UpdateChatRequest(
+    val name: String? = null,
+    val description: String? = null,
+)
+
+data class AddMembersRequest(
+    @SerializedName("user_ids") val userIds: List<Int>,
+)
+
+data class RemoveMemberRequest(
+    @SerializedName("user_id") val userId: Int,
+)
+
 // ─────────────────────────── Account store ───────────────────────────
 
 data class Account(
@@ -184,6 +220,17 @@ data class Account(
     val user: UserDto = UserDto(),
 ) {
     val display: String get() = "$host:$port"
+
+    private val ntfyExplicit: Boolean get() = ntfyHost.isNotBlank()
+
+    /** If ntfy is not configured, fall back to the main server host. */
+    val effectiveNtfyHost: String get() = if (ntfyExplicit) ntfyHost else host
+
+    val effectiveNtfyPort: Int get() = if (ntfyExplicit) ntfyPort else 8081
+
+    val effectiveNtfyUser: String get() = ntfyUser?.takeIf { it.isNotBlank() } ?: "tasksbase"
+
+    val effectiveNtfyPass: String get() = ntfyPass?.takeIf { it.isNotBlank() } ?: "tasksbase"
 }
 
 object Store {
@@ -248,6 +295,21 @@ interface ApiService {
 
     @POST("chat")
     suspend fun createChat(@Body body: CreateChatRequest): ChatDto
+
+    @GET("chat/{id}")
+    suspend fun chat(@Path("id") chatId: Int): ChatDto
+
+    @PATCH("chat/{id}")
+    suspend fun updateChat(@Path("id") chatId: Int, @Body body: UpdateChatRequest): ChatDto
+
+    @POST("chat/{id}/members")
+    suspend fun addMembers(@Path("id") chatId: Int, @Body body: AddMembersRequest): ChatDto
+
+    @POST("chat/{id}/leave")
+    suspend fun leaveChat(@Path("id") chatId: Int)
+
+    @DELETE("chat/{id}")
+    suspend fun deleteChat(@Path("id") chatId: Int)
 }
 
 object Net {
@@ -375,6 +437,15 @@ private fun App() {
     var active by remember { mutableStateOf(Store.active) }
     var showLogin by remember { mutableStateOf(active == null) }
     var selectedChat by remember { mutableStateOf<ChatDto?>(null) }
+
+    val deletedChat by RealtimeController.deletedChat.collectAsState()
+    LaunchedEffect(deletedChat) {
+        val id = deletedChat
+        if (id != null) {
+            if (selectedChat?.id == id) selectedChat = null
+            RealtimeController.deletedChat.value = null
+        }
+    }
 
     DisposableEffect(active?.id) {
         val acc = active
@@ -611,7 +682,7 @@ private fun MainScreen(
             if (selectedChat == null) {
                 ChatList(active, onSelectChat)
             } else {
-                ChatView(selectedChat, active)
+                ChatView(selectedChat, active, onBack)
             }
         }
     }
@@ -690,6 +761,12 @@ private fun ChatList(active: Account?, onOpen: (ChatDto) -> Unit) {
                             .padding(horizontal = 16.dp, vertical = 12.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
+                        InitialsAvatar(
+                            text = chatAvatarText(chat, active?.user?.id),
+                            color = avatarColor(chatAvatarOwnerId(chat, active?.user?.id)),
+                            size = 44,
+                        )
+                        Spacer(Modifier.width(12.dp))
                         Column(Modifier.weight(1f)) {
                             Text(
                                 text = chatTitle(chat, active?.user?.id),
@@ -712,12 +789,13 @@ private fun ChatList(active: Account?, onOpen: (ChatDto) -> Unit) {
 }
 
 @Composable
-private fun ChatView(chat: ChatDto, active: Account?) {
+private fun ChatView(chat: ChatDto, active: Account?, onBack: () -> Unit) {
     var messages by remember { mutableStateOf<List<MessageDto>>(emptyList()) }
     var draft by remember { mutableStateOf("") }
     var showEmoji by remember { mutableStateOf(false) }
     var sending by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
+    var showInfo by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
 
     suspend fun refresh() {
@@ -773,12 +851,26 @@ private fun ChatView(chat: ChatDto, active: Account?) {
     }
 
     Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surfaceVariant)) {
-        Text(
-            text = chatTitle(chat, active?.user?.id),
-            fontWeight = FontWeight.SemiBold,
-            fontSize = 15.sp,
-            modifier = Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surface).padding(12.dp),
-        )
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(MaterialTheme.colorScheme.surface)
+                .clickable { showInfo = true }
+                .padding(12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            InitialsAvatar(
+                text = chatAvatarText(chat, active?.user?.id),
+                color = avatarColor(chatAvatarOwnerId(chat, active?.user?.id)),
+                size = 32,
+            )
+            Spacer(Modifier.width(10.dp))
+            Text(
+                text = chatTitle(chat, active?.user?.id),
+                fontWeight = FontWeight.SemiBold,
+                fontSize = 15.sp,
+            )
+        }
 
         Box(Modifier.weight(1f).fillMaxWidth()) {
             LazyColumn(
@@ -823,6 +915,19 @@ private fun ChatView(chat: ChatDto, active: Account?) {
                 }
             }
         }
+    }
+
+    if (showInfo) {
+        ChatInfoDialogDesktop(
+            chat = chat,
+            active = active,
+            onDismiss = { showInfo = false },
+            onChanged = {
+                showInfo = false
+                RealtimeController.tick.value++
+                onBack()
+            },
+        )
     }
 }
 
@@ -882,6 +987,267 @@ private fun chatTitle(chat: ChatDto, myId: Int?): String {
     if (!chat.name.isNullOrBlank()) return chat.name!!
     val other = chat.members?.firstOrNull { it.id != myId } ?: chat.members?.firstOrNull()
     return other?.fullName ?: "Чат"
+}
+
+private val AVATAR_COLORS = listOf(
+    Color(0xFFFF6B6B), Color(0xFF4ECDC4), Color(0xFF45B7D1), Color(0xFF96CEB4),
+    Color(0xFFFFEAA7), Color(0xFFDDA0DD), Color(0xFF98D8C8), Color(0xFFF7DC6F),
+    Color(0xFFBB8FCE), Color(0xFF85C1E9),
+)
+
+private fun avatarColor(id: Int?): Color {
+    val value = id ?: 0
+    return AVATAR_COLORS[((value % AVATAR_COLORS.size) + AVATAR_COLORS.size) % AVATAR_COLORS.size]
+}
+
+private fun chatAvatarText(chat: ChatDto, myId: Int?): String {
+    if (!chat.name.isNullOrBlank()) return chat.name!!.first().uppercase()
+    if (chat.type == "dm") {
+        val other = chat.members?.firstOrNull { it.id != myId }
+        return other?.initials ?: "?"
+    }
+    return if (chat.type == "channel") "#" else "@"
+}
+
+private fun chatAvatarOwnerId(chat: ChatDto, myId: Int?): Int? =
+    if (chat.type == "dm") chat.members?.firstOrNull { it.id != myId }?.id else chat.id
+
+private fun isChatAdmin(chat: ChatDto, myId: Int?): Boolean {
+    val role = chat.members?.firstOrNull { it.id == myId }?.pivot?.role
+    if (role != null) return role == "admin"
+    return chat.createdBy == myId
+}
+
+private fun memberRoleLabel(role: String?): String = when (role) {
+    "admin" -> "Администратор"
+    "muted" -> "Заглушён"
+    else -> "Участник"
+}
+
+private fun userStatusLabel(status: String?): String = when (status) {
+    "active" -> "Активен"
+    "suspended" -> "Заблокирован"
+    "pending" -> "Ожидает подтверждения"
+    else -> ""
+}
+
+@Composable
+private fun InitialsAvatar(text: String, color: Color, size: Int) {
+    Box(
+        modifier = Modifier.size(size.dp).clip(CircleShape).background(color),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(text, color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = (size * 0.4f).sp)
+    }
+}
+
+@Composable
+private fun ChatInfoDialogDesktop(
+    chat: ChatDto,
+    active: Account?,
+    onDismiss: () -> Unit,
+    onChanged: () -> Unit,
+) {
+    val scope = rememberCoroutineScope()
+    val myId = active?.user?.id
+    val isDm = chat.type == "dm"
+    val isChannel = chat.type == "channel"
+    val canManage = isChatAdmin(chat, myId)
+    val other = if (isDm) chat.members?.firstOrNull { it.id != myId } else null
+    val title = if (isDm) (other?.fullName ?: "Личный чат")
+    else (chat.name?.takeIf { it.isNotBlank() } ?: "Чат")
+
+    var users by remember { mutableStateOf<List<UserDto>>(emptyList()) }
+    var nameDraft by remember { mutableStateOf(chat.name.orEmpty()) }
+    var editingName by remember { mutableStateOf(false) }
+    var showAdd by remember { mutableStateOf(false) }
+    var selected by remember { mutableStateOf<Set<Int>>(emptySet()) }
+    var confirmLeave by remember { mutableStateOf(false) }
+    var confirmDelete by remember { mutableStateOf(false) }
+    var busy by remember { mutableStateOf(false) }
+    var error by remember { mutableStateOf<String?>(null) }
+
+    LaunchedEffect(Unit) {
+        runCatching { withContext(Dispatchers.IO) { Net.api.users() } }.onSuccess { users = it }
+    }
+
+    fun run(action: suspend () -> Unit) {
+        busy = true
+        error = null
+        scope.launch {
+            try {
+                action()
+                onChanged()
+            } catch (e: Exception) {
+                error = e.message ?: "Ошибка"
+            } finally {
+                busy = false
+            }
+        }
+    }
+
+    AlertDialog(
+        onDismissRequest = { if (!busy) onDismiss() },
+        confirmButton = { TextButton(onClick = onDismiss) { Text("Закрыть") } },
+        title = { Text(title) },
+        text = {
+            Column(
+                modifier = Modifier.widthIn(max = 460.dp).heightIn(max = 460.dp).verticalScroll(rememberScrollState()),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                InitialsAvatar(
+                    text = if (isDm) (other?.initials ?: "?") else (chat.name?.firstOrNull()?.uppercase() ?: "@"),
+                    color = avatarColor(chatAvatarOwnerId(chat, myId)),
+                    size = 72,
+                )
+                Spacer(Modifier.size(10.dp))
+
+                if (isDm) {
+                    other?.email?.takeIf { it.isNotBlank() }?.let {
+                        Text(it, color = Muted, fontSize = 13.sp)
+                    }
+                    userStatusLabel(other?.status).takeIf { it.isNotBlank() }?.let {
+                        Text(it, color = Accent, fontSize = 12.sp)
+                    }
+                } else {
+                    if (editingName) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            OutlinedTextField(nameDraft, { nameDraft = it }, singleLine = true, modifier = Modifier.weight(1f))
+                            TextButton(
+                                onClick = {
+                                    val trimmed = nameDraft.trim()
+                                    editingName = false
+                                    if (trimmed.isNotEmpty() && trimmed != chat.name) {
+                                        run { Net.api.updateChat(chat.id, UpdateChatRequest(name = trimmed)) }
+                                    }
+                                },
+                                enabled = !busy,
+                            ) { Text("OK") }
+                        }
+                    } else {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(title, fontWeight = FontWeight.SemiBold, fontSize = 16.sp)
+                            if (canManage) {
+                                Spacer(Modifier.size(8.dp))
+                                TextButton(onClick = { editingName = true }, enabled = !busy) { Text("Изменить") }
+                            }
+                        }
+                    }
+
+                    chat.description?.takeIf { it.isNotBlank() }?.let {
+                        Spacer(Modifier.size(4.dp))
+                        Text(it, color = Muted, fontSize = 13.sp)
+                    }
+
+                    Spacer(Modifier.size(10.dp))
+                    Text("${chat.members?.size ?: 0} участников", fontWeight = FontWeight.SemiBold)
+                    Spacer(Modifier.size(6.dp))
+
+                    chat.members.orEmpty().forEach { member ->
+                        Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                            InitialsAvatar(text = member.initials, color = avatarColor(member.id), size = 30)
+                            Spacer(Modifier.size(10.dp))
+                            Column(Modifier.weight(1f)) {
+                                Text(member.fullName + if (member.id == myId) " (вы)" else "", fontSize = 14.sp)
+                                Text(memberRoleLabel(member.pivot?.role), fontSize = 11.sp, color = Muted)
+                            }
+                        }
+                    }
+
+                    Spacer(Modifier.size(8.dp))
+                    if (canManage) {
+                        TextButton(onClick = { showAdd = true }, enabled = !busy) { Text("Добавить участников") }
+                    }
+                    TextButton(onClick = { confirmLeave = true }, enabled = !busy) {
+                        Text(if (isChannel) "Покинуть канал" else "Покинуть группу")
+                    }
+                }
+
+                Spacer(Modifier.size(4.dp))
+                TextButton(onClick = { confirmDelete = true }, enabled = !busy) {
+                    Text("Удалить чат", color = MaterialTheme.colorScheme.error)
+                }
+
+                if (error != null) {
+                    Spacer(Modifier.size(8.dp))
+                    Text(error!!, color = MaterialTheme.colorScheme.error, fontSize = 12.sp)
+                }
+            }
+        },
+    )
+
+    if (showAdd) {
+        val existing = chat.members.orEmpty().map { it.id }.toSet()
+        val available = users.filter { it.id !in existing }
+        AlertDialog(
+            onDismissRequest = { showAdd = false },
+            title = { Text("Добавить участников") },
+            text = {
+                if (available.isEmpty()) {
+                    Text("Нет доступных пользователей")
+                } else {
+                    LazyColumn(Modifier.heightIn(max = 360.dp)) {
+                        items(available, key = { it.id }) { user ->
+                            Row(
+                                modifier = Modifier.fillMaxWidth().clickable {
+                                    selected = if (selected.contains(user.id)) selected - user.id else selected + user.id
+                                }.padding(vertical = 6.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Checkbox(checked = selected.contains(user.id), onCheckedChange = null)
+                                InitialsAvatar(text = user.initials, color = avatarColor(user.id), size = 28)
+                                Spacer(Modifier.size(8.dp))
+                                Text(user.fullName)
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        val ids = selected.toList()
+                        if (ids.isEmpty()) return@Button
+                        showAdd = false
+                        selected = emptySet()
+                        run { Net.api.addMembers(chat.id, AddMembersRequest(ids)) }
+                    },
+                    enabled = !busy && selected.isNotEmpty(),
+                ) { Text("Добавить") }
+            },
+            dismissButton = { TextButton(onClick = { showAdd = false; selected = emptySet() }) { Text("Отмена") } },
+        )
+    }
+
+    if (confirmLeave) {
+        AlertDialog(
+            onDismissRequest = { confirmLeave = false },
+            title = { Text(if (isChannel) "Покинуть канал?" else "Покинуть группу?") },
+            text = { Text("Вы больше не будете получать сообщения из этого чата.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    confirmLeave = false
+                    run { Net.api.leaveChat(chat.id) }
+                }) { Text("Покинуть") }
+            },
+            dismissButton = { TextButton(onClick = { confirmLeave = false }) { Text("Отмена") } },
+        )
+    }
+
+    if (confirmDelete) {
+        AlertDialog(
+            onDismissRequest = { confirmDelete = false },
+            title = { Text("Удалить чат?") },
+            text = { Text("Чат будет удалён для всех участников. Это действие нельзя отменить.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    confirmDelete = false
+                    run { Net.api.deleteChat(chat.id) }
+                }) { Text("Удалить") }
+            },
+            dismissButton = { TextButton(onClick = { confirmDelete = false }) { Text("Отмена") } },
+        )
+    }
 }
 
 private fun timeOf(iso: String?): String {
@@ -985,6 +1351,9 @@ private class RealtimeClient(
 
     var onMessageEvent: ((JSONObject) -> Unit)? = null
 
+    /** Invoked when a chat is deleted for everyone. */
+    var onChatDeleted: ((Int) -> Unit)? = null
+
     private fun wsUrl(): String =
         "ws://$host:$port/app/$key?protocol=7&client=desktop&version=1.0&flash=false"
 
@@ -1040,11 +1409,18 @@ private class RealtimeClient(
             "pusher_internal:subscription_succeeded" -> {
                 obj.optString("channel").takeIf { it.isNotEmpty() }?.let { subscribed.add(it) }
             }
-            else -> if (event.endsWith("MessageCreated") ||
-                event.endsWith("MessageUpdated") ||
-                event.endsWith("MessageDeleted")
-            ) {
-                onMessageEvent?.invoke(obj)
+            else -> {
+                if (event.endsWith("ChatDeleted")) {
+                    val data = runCatching { JSONObject(obj.optString("data")) }.getOrNull()
+                    val chatId = data?.optInt("chat_id", -1) ?: -1
+                    if (chatId > 0) onChatDeleted?.invoke(chatId)
+                }
+                if (event.endsWith("MessageCreated") ||
+                    event.endsWith("MessageUpdated") ||
+                    event.endsWith("MessageDeleted")
+                ) {
+                    onMessageEvent?.invoke(obj)
+                }
             }
         }
     }
@@ -1139,6 +1515,9 @@ private class NtfyClient(
 private object RealtimeController {
     val tick = MutableStateFlow(0)
 
+    /** Chat id that was just deleted while it was open in the UI. */
+    val deletedChat = MutableStateFlow<Int?>(null)
+
     private var ws: RealtimeClient? = null
     private var ntfy: NtfyClient? = null
 
@@ -1174,24 +1553,26 @@ private object RealtimeController {
                     tick.value++
                 }
             }
+            rt.onChatDeleted = { id ->
+                if (id == activeChatId) deletedChat.value = id
+                tick.value++
+            }
             rt.connect()
             rt.subscribe("private-user.${account.user.id}")
         }
 
-        if (account.ntfyHost.isNotBlank()) {
-            ntfy = NtfyClient(
-                baseUrl = "http://${account.ntfyHost}:${account.ntfyPort}",
-                topic = account.topic,
-                user = account.ntfyUser,
-                pass = account.ntfyPass,
-            ) { obj ->
-                Notifier.notify(
-                    obj.optString("title").ifBlank { "Чат" },
-                    obj.optString("message").ifBlank { "Новое уведомление" },
-                )
-                tick.value++
-            }.also { it.connect() }
-        }
+        ntfy = NtfyClient(
+            baseUrl = "http://${account.effectiveNtfyHost}:${account.effectiveNtfyPort}",
+            topic = account.topic,
+            user = account.effectiveNtfyUser,
+            pass = account.effectiveNtfyPass,
+        ) { obj ->
+            Notifier.notify(
+                obj.optString("title").ifBlank { "Чат" },
+                obj.optString("message").ifBlank { "Новое уведомление" },
+            )
+            tick.value++
+        }.also { it.connect() }
     }
 
     @Synchronized
@@ -1352,7 +1733,7 @@ private object Autostart {
 
 // ───────────────────────────── Updates ─────────────────────────────
 
-private const val APP_VERSION = "1.0.0"
+private const val APP_VERSION = "1.0.1"
 
 private data class DesktopUpdate(
     val version: String = "",

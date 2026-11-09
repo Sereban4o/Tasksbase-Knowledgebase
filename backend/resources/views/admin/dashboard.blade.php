@@ -36,6 +36,7 @@
         <a href="{{ route('admin.statuses.index') }}" class="btn btn-secondary">📋 Управление статусами</a>
         <a href="{{ route('admin.priorities.index') }}" class="btn btn-secondary">🎯 Управление приоритетами</a>
         <a href="{{ route('admin.roles.index') }}" class="btn btn-secondary">🔐 Управление ролями</a>
+        <a href="{{ route('admin.releases.index') }}" class="btn btn-secondary">🚀 Релизы приложений</a>
     </div>
 </div>
 @endsection

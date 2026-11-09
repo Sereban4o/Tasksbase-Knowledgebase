@@ -19,6 +19,7 @@ use App\Http\Controllers\Api\NotificationController;
 use App\Http\Controllers\Api\Admin\AdminController;
 use App\Http\Controllers\Api\Chat\ChatController;
 use App\Http\Controllers\Api\Chat\MessageController;
+use App\Http\Controllers\Api\Integration\OneC\OneCController;
 
 /*
 |--------------------------------------------------------------------------
@@ -34,6 +35,18 @@ Route::prefix('v1')->group(function () {
     Route::post('/auth/forgot-password', [AuthController::class, 'forgotPassword'])->middleware('throttle:5,1');
     Route::post('/auth/reset-password', [AuthController::class, 'resetPassword']);
     Route::post('/auth/verify-email/{id}/{hash}', [AuthController::class, 'verifyEmail'])->middleware('signed');
+
+    // ─── 1С Integration (token + HMAC, no user session) ───
+    Route::prefix('integration/1c')->middleware(['one.c', 'throttle:120,1'])->group(function () {
+        Route::post('/users/sync', [OneCController::class, 'usersSync']);
+        Route::post('/issues/push', [OneCController::class, 'issuesPush']);
+        Route::match(['get', 'post'], '/issues/pull', [OneCController::class, 'issuesPull']);
+        Route::post('/issues/{externalId}/comment', [OneCController::class, 'issueComment']);
+        Route::post('/notifications', [OneCController::class, 'notifications']);
+        Route::post('/chats/messages', [OneCController::class, 'chatMessage']);
+        Route::post('/files/upload', [OneCController::class, 'fileUpload']);
+        Route::post('/kb/pages', [OneCController::class, 'kbPage']);
+    });
 
     // ─── Protected Auth Routes ───
     Route::middleware('auth:sanctum')->group(function () {
@@ -169,6 +182,7 @@ Route::prefix('v1')->group(function () {
             // Chat members
             Route::post('/{chat}/members', [ChatController::class, 'addMembers']);
             Route::post('/{chat}/members/remove', [ChatController::class, 'removeMember']);
+            Route::post('/{chat}/leave', [ChatController::class, 'leaveChat'])->whereNumber('chat');
             Route::post('/{chat}/read', [ChatController::class, 'markAsRead']);
 
             // Messages

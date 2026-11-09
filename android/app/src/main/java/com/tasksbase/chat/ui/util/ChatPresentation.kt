@@ -40,3 +40,25 @@ fun chatPreview(chat: ChatDto): String {
 
 fun messageAuthorName(message: MessageDto): String =
     message.sender?.fullName ?: "Пользователь"
+
+fun currentMemberRole(chat: ChatDto, myId: Int? = Session.currentUser?.id): String? =
+    chat.members?.firstOrNull { it.id == myId }?.pivot?.role
+
+fun isChatAdmin(chat: ChatDto, myId: Int? = Session.currentUser?.id): Boolean {
+    val role = currentMemberRole(chat, myId)
+    if (role != null) return role == "admin"
+    return chat.createdBy == myId
+}
+
+fun memberRoleLabel(role: String?): String = when (role) {
+    "admin" -> "Администратор"
+    "muted" -> "Заглушён"
+    else -> "Участник"
+}
+
+fun userStatusLabel(status: String?): String = when (status) {
+    "active" -> "Активен"
+    "suspended" -> "Заблокирован"
+    "pending" -> "Ожидает подтверждения"
+    else -> ""
+}

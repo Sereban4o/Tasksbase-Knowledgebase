@@ -567,6 +567,15 @@ composer require darkaonline/l5-swagger
 - [x] Установлен l5-swagger для API документации
 - [x] Созданы базовые тесты (IssueTest, AuthTest)
 
+### Спринт 5: Чаты, релизы, интеграция 1С (завершён)
+- [x] Удаление чата для всех участников (событие `ChatDeleted`, soft-delete + detach)
+- [x] Фикс DM-дедупа (переиспользование только чатов ровно с 2 участниками) + команда `chat:repair-dm`
+- [x] Загрузка релизов из админки (Android/Windows): Blade-раздел `/admin/releases`, манифест `latest.json`
+- [x] Интеграция с 1С: token + HMAC, IP-allowlist, rate-limit, fail-closed
+- [x] Оптимизация N+1 в выгрузке задач в 1С — пакетная загрузка `external_id`
+- [x] Безопасность релизов: whitelist расширений, `Content-Disposition: attachment`, проверка подписи (опционально)
+- [x] Убран токен из URL в переходе на Laravel Admin Panel
+
 ---
 
 ## 5. 🎯 Рекомендуемый план действий

@@ -29,7 +29,7 @@ compose.desktop {
             modules("jdk.unsupported")
             targetFormats(TargetFormat.Msi, TargetFormat.Exe)
             packageName = "TasksbaseChat"
-            packageVersion = "1.0.0"
+            packageVersion = "1.0.1"
         }
     }
 }

@@ -48,7 +48,10 @@ import com.tasksbase.chat.data.remote.UserDto
 import com.tasksbase.chat.data.remote.UpdateInfo
 import com.tasksbase.chat.data.remote.UpdateManager
 import com.tasksbase.chat.di.ServiceLocator
+import com.tasksbase.chat.di.Session
 import com.tasksbase.chat.notifications.RealtimeService
+import com.tasksbase.chat.ui.components.ChatAvatar
+import com.tasksbase.chat.ui.components.chatAvatarUrl
 import com.tasksbase.chat.ui.components.CenterError
 import com.tasksbase.chat.ui.components.CenterProgress
 import com.tasksbase.chat.ui.components.CenterText
@@ -86,9 +89,11 @@ fun ChatListScreen(
     val active = ServiceLocator.activeAccount
 
     val dark by ServiceLocator.darkThemeFlow.collectAsState()
+    val listVersion by Session.chatListVersion.collectAsState()
 
     val context = LocalContext.current
     var updateInfo by remember { mutableStateOf<UpdateInfo?>(null) }
+    var infoChat by remember { mutableStateOf<ChatDto?>(null) }
 
     LaunchedEffect(Unit) {
         runCatching { UpdateManager.check() }.getOrNull()?.let { updateInfo = it }
@@ -109,6 +114,24 @@ fun ChatListScreen(
 
     LaunchedEffect(showCreate) {
         if (showCreate && users.isEmpty()) {
+            runCatching { ServiceLocator.chatRepository.users() }.onSuccess { users = it }
+        }
+    }
+
+    // Reload the list when something requests a refresh (e.g. a chat was deleted).
+    LaunchedEffect(listVersion) {
+        if (listVersion > 0) {
+            runCatching { ServiceLocator.chatRepository.myChats() }
+                .onSuccess {
+                    chats = it
+                    error = null
+                }
+        }
+    }
+
+    // Load users for the add-members dialog when the info card is opened.
+    LaunchedEffect(infoChat) {
+        if (infoChat != null && users.isEmpty()) {
             runCatching { ServiceLocator.chatRepository.users() }.onSuccess { users = it }
         }
     }
@@ -230,7 +253,11 @@ fun ChatListScreen(
                 chats.isEmpty() -> CenterText("Чатов пока нет.\nНажмите «+», чтобы создать.")
                 else -> LazyColumn(Modifier.fillMaxSize()) {
                     items(chats, key = { it.id }) { chat ->
-                        ChatListRow(chat = chat, onClick = { onOpenChat(chat) })
+                        ChatListRow(
+                            chat = chat,
+                            onClick = { onOpenChat(chat) },
+                            onInfo = { infoChat = chat },
+                        )
                     }
                 }
             }
@@ -267,6 +294,22 @@ fun ChatListScreen(
         )
     }
 
+    val infoTarget = infoChat
+    if (infoTarget != null) {
+        ChatInfoDialog(
+            chat = infoTarget,
+            myId = active?.user?.id,
+            users = users,
+            onDismiss = { infoChat = null },
+            onChanged = {
+                infoChat = null
+                scope.launch {
+                    runCatching { chats = ServiceLocator.chatRepository.myChats() }
+                }
+            },
+        )
+    }
+
     if (showCreate) {
         CreateChatDialog(
             users = users,
@@ -284,7 +327,7 @@ fun ChatListScreen(
 }
 
 @Composable
-private fun ChatListRow(chat: ChatDto, onClick: () -> Unit) {
+private fun ChatListRow(chat: ChatDto, onClick: () -> Unit, onInfo: () -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -293,10 +336,12 @@ private fun ChatListRow(chat: ChatDto, onClick: () -> Unit) {
             .padding(horizontal = 12.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        LetterAvatar(
-            text = chatAvatarText(chat),
+        ChatAvatar(
+            avatarUrl = chatAvatarUrl(chat),
+            fallbackText = chatAvatarText(chat),
             color = avatarColorFor(chatAvatarOwnerId(chat)),
             size = 50.dp,
+            modifier = Modifier.clickable(onClick = onInfo),
         )
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {

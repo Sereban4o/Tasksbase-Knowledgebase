@@ -2,12 +2,15 @@ package com.tasksbase.chat.data.repository
 
 import android.content.ContentResolver
 import android.net.Uri
+import com.tasksbase.chat.data.remote.AddMembersRequest
 import com.tasksbase.chat.data.remote.ApiService
 import com.tasksbase.chat.data.remote.ChatDto
 import com.tasksbase.chat.data.remote.CreateChatRequest
 import com.tasksbase.chat.data.remote.FileDto
 import com.tasksbase.chat.data.remote.MessageDto
+import com.tasksbase.chat.data.remote.RemoveMemberRequest
 import com.tasksbase.chat.data.remote.SendMessageRequest
+import com.tasksbase.chat.data.remote.UpdateChatRequest
 import com.tasksbase.chat.data.remote.UserDto
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.MultipartBody
@@ -35,6 +38,21 @@ class ChatRepository(private val api: ApiService) {
         description: String?,
         userIds: List<Int>,
     ): ChatDto = api.createChat(CreateChatRequest(type, name, description, userIds))
+
+    suspend fun chat(chatId: Int): ChatDto = api.chat(chatId)
+
+    suspend fun renameChat(chatId: Int, name: String): ChatDto =
+        api.updateChat(chatId, UpdateChatRequest(name = name))
+
+    suspend fun addMembers(chatId: Int, userIds: List<Int>): ChatDto =
+        api.addMembers(chatId, AddMembersRequest(userIds))
+
+    suspend fun removeMember(chatId: Int, userId: Int): ChatDto =
+        api.removeMember(chatId, RemoveMemberRequest(userId))
+
+    suspend fun leaveChat(chatId: Int) = api.leaveChat(chatId)
+
+    suspend fun deleteChat(chatId: Int) = api.deleteChat(chatId)
 
     /** Uploads a picked file/image (GIF is an image), then sends it as a message. */
     suspend fun sendAttachment(chatId: Int, uri: Uri, contentResolver: ContentResolver): MessageDto {

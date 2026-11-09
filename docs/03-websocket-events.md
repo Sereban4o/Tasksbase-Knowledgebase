@@ -2,7 +2,7 @@
 
 ## 1. Обзор
 
-Проект использует Laravel Echo + Redis Pub/Sub для real-time событий.
+Проект использует Laravel Reverb (Pusher-протокол, `laravel-echo` + `pusher-js` на клиенте) для real-time событий.
 
 ## 2. Архитектура
 
@@ -62,6 +62,19 @@
 | `PageCreated` | Страница создана | `{ page: Page, author: User }` |
 | `PageUpdated` | Страница обновлена | `{ page: Page, version: number }` |
 | `PageDeleted` | Страница удалена | `{ pageId: number }` |
+
+### 3.5 Chat Events
+
+**Каналы:** `chat.{chatId}` (участники чата) и `user.{userId}` (персональные уведомления).
+
+| Событие | Канал | Описание | Payload |
+|---------|-------|----------|---------|
+| `MessageCreated` | `chat.*` + `user.*` | Новое сообщение | `{ id, chat_id, sender_id, body, type, sender, files, chat_name, body_preview }` |
+| `MessageUpdated` | `chat.*` | Сообщение изменено | сообщение |
+| `MessageDeleted` | `chat.*` | Сообщение удалено | `{ id, chat_id }` |
+| `ChatDeleted` | `chat.*` + `user.*` | Чат удалён для всех участников | `{ chat_id, chat_type, chat_name }` |
+
+> На клиентах `ChatDeleted` инвалидирует список чатов и закрывает открытый чат. Событие рассылается на канал чата и на персональные каналы каждого участника (чтобы список обновился, даже если чат не открыт).
 
 ## 4. Frontend Integration
 

@@ -31,8 +31,19 @@ data class Account(
     /** e.g. "212.109.16.56:8000" */
     val display: String get() = "$serverHost:$serverPort"
 
-    val ntfyBaseUrl: String
-        get() = if (ntfyHost.isBlank()) "" else "http://$ntfyHost:$ntfyPort"
+    private val ntfyExplicit: Boolean get() = ntfyHost.isNotBlank()
+
+    /** If ntfy is not configured, fall back to the main server host. */
+    val effectiveNtfyHost: String get() = if (ntfyExplicit) ntfyHost else serverHost
+
+    val effectiveNtfyPort: Int get() = if (ntfyExplicit) ntfyPort else 8081
+
+    val ntfyBaseUrl: String get() = "http://$effectiveNtfyHost:$effectiveNtfyPort"
+
+    /** Default ntfy credentials used when the user leaves them empty. */
+    val effectiveNtfyUser: String get() = ntfyUser?.takeIf { it.isNotBlank() } ?: "tasksbase"
+
+    val effectiveNtfyPass: String get() = ntfyPass?.takeIf { it.isNotBlank() } ?: "tasksbase"
 }
 
 /** Persists the account list and the active account id. */

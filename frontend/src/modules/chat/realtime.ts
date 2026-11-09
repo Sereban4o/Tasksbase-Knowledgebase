@@ -111,7 +111,7 @@ function getEcho(token: string): any {
  * Subscribes to the private `chat.{chatId}` channel over Laravel Reverb
  * (Pusher protocol) and keeps the React Query cache in sync with realtime events.
  */
-export function useChatRealtime(chatId: number | null): void {
+export function useChatRealtime(chatId: number | null, onDeleted?: () => void): void {
   const queryClient = useQueryClient()
   const { token } = useAuth()
   const channelRef = useRef<any>(null)
@@ -128,20 +128,64 @@ export function useChatRealtime(chatId: number | null): void {
       queryClient.invalidateQueries({ queryKey: ['chat-my'] })
     }
 
+    const refreshList = () => {
+      queryClient.invalidateQueries({ queryKey: ['chat-my'] })
+    }
+
+    const handleDeleted = () => {
+      refreshList()
+      onDeleted?.()
+    }
+
     channel.listen('MessageCreated', refresh)
     channel.listen('MessageUpdated', refresh)
     channel.listen('MessageDeleted', refresh)
+    channel.listen('ChatDeleted', handleDeleted)
 
     return () => {
       try {
         channel.stopListening('MessageCreated')
         channel.stopListening('MessageUpdated')
         channel.stopListening('MessageDeleted')
+        channel.stopListening('ChatDeleted')
         echo.leave(`chat.${chatId}`)
       } catch {
         /* ignore teardown errors */
       }
       channelRef.current = null
     }
-  }, [chatId, token, queryClient])
+  }, [chatId, token, queryClient, onDeleted])
+}
+
+/**
+ * Subscribes to the private `user.{userId}` channel to keep the chat list in sync
+ * with global events such as a chat being deleted for everyone.
+ */
+export function useUserRealtime(): void {
+  const queryClient = useQueryClient()
+  const { token, user } = useAuth()
+
+  useEffect(() => {
+    if (!token || !user?.id) return
+
+    const echo = getEcho(token)
+    const channel = echo.private(`user.${user.id}`)
+
+    const refresh = () => {
+      queryClient.invalidateQueries({ queryKey: ['chat-my'] })
+    }
+
+    channel.listen('ChatDeleted', refresh)
+    channel.listen('MessageCreated', refresh)
+
+    return () => {
+      try {
+        channel.stopListening('ChatDeleted')
+        channel.stopListening('MessageCreated')
+        echo.leave(`user.${user.id}`)
+      } catch {
+        /* ignore teardown errors */
+      }
+    }
+  }, [token, user?.id, queryClient])
 }

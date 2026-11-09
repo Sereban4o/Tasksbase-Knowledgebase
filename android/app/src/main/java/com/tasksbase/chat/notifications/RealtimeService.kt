@@ -45,6 +45,7 @@ class RealtimeService : Service() {
             tokenProvider = { Session.token },
         )
         realtime.onUserMessage = { data -> handleMessage(data) }
+        realtime.onChatDeleted = { Session.bumpChatList() }
         realtime.connect()
         realtime.subscribe("private-user.${user.id}")
         client = realtime
@@ -53,8 +54,8 @@ class RealtimeService : Service() {
         val account = ServiceLocator.activeAccount
         ntfy?.close()
         ntfy = null
-        if (account != null && account.ntfyHost.isNotBlank()) {
-            ntfy = NtfyClient(account.ntfyBaseUrl, account.ntfyTopic, account.ntfyUser, account.ntfyPass) { obj ->
+        if (account != null) {
+            ntfy = NtfyClient(account.ntfyBaseUrl, account.ntfyTopic, account.effectiveNtfyUser, account.effectiveNtfyPass) { obj ->
                 val title = obj.optString("title").ifBlank { "Tasksbase" }
                 val text = obj.optString("message").ifBlank { "Новое уведомление" }
                 NotificationHelper.showMessage(this, title, text)

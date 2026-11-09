@@ -2,6 +2,7 @@
 
 namespace App\Observers;
 
+use App\Jobs\PushNotificationTo1C;
 use App\Models\Notification;
 use App\Services\NtfyService;
 
@@ -17,5 +18,10 @@ class NotificationObserver
             'Tasksbase',
             (string) $summary,
         );
+
+        // Mirror the notification to 1С when the integration is enabled.
+        if (config('one_c.enabled')) {
+            PushNotificationTo1C::dispatch($notification);
+        }
     }
 }

@@ -215,6 +215,15 @@ erDiagram
         bigint page_id FK
         string context
     }
+
+    integration_mappings {
+        bigint id PK
+        string integration
+        string entity_type
+        bigint entity_id
+        string external_id
+        json meta
+    }
 ```
 
 ## 2. Описание таблиц
@@ -251,6 +260,14 @@ erDiagram
 #### `pages`
 Страницы Knowledgebase с версионированием.
 
+#### `integration_mappings`
+Маппинг локальных сущностей на внешние идентификаторы (интеграция с 1С):
+- `integration` — идентификатор интеграции (`one_c`);
+- `entity_type` — `user`, `issue`, `project`, `page` и т.п.;
+- `entity_id` — локальный id; `external_id` — идентификатор в 1С;
+- `meta` — дополнительная служебная информация (JSON);
+- unique `(integration, entity_type, external_id)`, индекс `(integration, entity_type, entity_id)`.
+
 ### Связи и ограничения
 
 - **Issues:** `assigned_to`, `created_by`, `parent_id`, `epic_id` — nullable FK
@@ -272,4 +289,8 @@ erDiagram
 -- Pages
 (space_id, status)
 (parent_id)
+
+-- Integration mappings
+(integration, entity_type, entity_id)
+UNIQUE (integration, entity_type, external_id)
 ```

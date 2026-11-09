@@ -20,6 +20,7 @@ services:
       - ./backend/.env.production
     volumes:
       - storage_data:/var/www/html/storage
+      - ./updates:/var/www/updates
     depends_on:
       postgres:
         condition: service_healthy

@@ -36,11 +36,13 @@ npm run dev
 
 ```
 docs/
-├── README.md              # Эта страница
-├── 01-architecture.md     # Архитектура системы
-├── 02-database-schema.md  # ER-диаграмма БД
-├── 03-websocket-events.md # Real-time события
-└── 04-contribution-guide.md # Гайд для разработчиков
+├── README.md               # Эта страница
+├── 01-architecture.md      # Архитектура системы, API, интеграции
+├── 02-database-schema.md   # ER-диаграмма БД
+├── 03-websocket-events.md  # Real-time события (включая чат)
+├── 04-contribution-guide.md # Гайд для разработчиков
+├── 05-linters-and-hooks.md # Линтеры и хуки
+└── 06-improvements.md      # Анализ и выполненные улучшения
 ```
 
 ## 🔧 Стек технологий

@@ -1,7 +1,8 @@
 {
-  "platform": "android",
-  "version": "1.0.0",
-  "versionCode": 1,
-  "path": "/updates/android/app-debug.apk",
-  "notes": "Текущая версия"
+    "sha256":  "a466e26def982ef97dc2469fbf41c7c37c491af2242696e50bfd42b46d8c6839",
+    "version":  "1.0.1",
+    "path":  "/updates/android/app-debug.apk",
+    "versionCode":  2,
+    "platform":  "android",
+    "notes":  "ntfy fallback to server host + DM privacy"
 }

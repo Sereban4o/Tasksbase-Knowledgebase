@@ -3,6 +3,7 @@
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Admin\AdminAuthController;
 use App\Http\Controllers\Admin\DashboardController;
+use App\Http\Controllers\Admin\ReleaseController;
 use App\Http\Middleware\EnsureUserIsAdmin;
 
 /*
@@ -72,4 +73,9 @@ Route::middleware(['auth', EnsureUserIsAdmin::class])->prefix('admin')->name('ad
     Route::get('/spaces/{space}/edit', [DashboardController::class, 'spaceEdit'])->name('spaces.edit');
     Route::patch('/spaces/{space}', [DashboardController::class, 'spaceUpdate'])->name('spaces.update');
     Route::delete('/spaces/{space}', [DashboardController::class, 'spaceDelete'])->name('spaces.delete');
+
+    // App releases (updates)
+    Route::get('/releases', [ReleaseController::class, 'index'])->name('releases.index');
+    Route::post('/releases', [ReleaseController::class, 'store'])->name('releases.store');
+    Route::delete('/releases/{platform}', [ReleaseController::class, 'destroy'])->name('releases.delete');
 });

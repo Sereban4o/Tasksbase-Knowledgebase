@@ -25,6 +25,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'admin.auth' => \App\Http\Middleware\SanitizeAdminAuth::class,
             'query.token' => \App\Http\Middleware\QueryTokenAuth::class,
             'debug' => \App\Http\Middleware\DebugMiddleware::class,
+            'one.c' => \App\Http\Middleware\VerifyOneCRequest::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions) {

@@ -1,13 +1,20 @@
-import { useCallback, useMemo, useRef, useState, type ChangeEvent } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react'
 import {
   Alert,
   Avatar,
   Box,
+  Button,
   CircularProgress,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
   IconButton,
   ListItemAvatar,
   ListItemButton,
   ListItemText,
+  Menu,
+  MenuItem,
   Popover,
   TextField,
   Tooltip,
@@ -21,6 +28,7 @@ import {
   Edit as ComposeIcon,
   KeyboardArrowLeft as CollapseIcon,
   KeyboardArrowRight as ExpandIcon,
+  MoreVert as MoreVertIcon,
   Search as SearchIcon,
   Send as SendIcon,
   SentimentSatisfiedAlt as EmojiIcon,
@@ -34,8 +42,13 @@ import { unwrapData, unwrapList } from '@/modules/shared/utils/apiResponse'
 import { useAuth } from '@/modules/auth/store/authStore'
 import ChatMessages from './ChatMessages'
 import CreateChatDialog from './CreateChatDialog'
+import ChatAvatar from './ChatAvatar'
+import ChatInfoPanel from './ChatInfoPanel'
+import UserInfoPanel from './UserInfoPanel'
+import GroupInfoPanel from './GroupInfoPanel'
 import { getFullName, getInitials, getUserAvatarColor, GROUP_CHAT_COLOR } from '../utils'
-import { soundSettings, useChatRealtime } from '../realtime'
+import { findChatMember, findDmPartner, isChatAdmin, resolveUserProfile, type InfoTarget } from '../info'
+import { soundSettings, useChatRealtime, useUserRealtime } from '../realtime'
 import { tg } from '../theme'
 import type { Chat, User } from '../types'
 
@@ -92,11 +105,13 @@ function ChatRow({
   currentUserId,
   isActive,
   onClick,
+  onAvatarClick,
 }: {
   chat: Chat
   currentUserId?: number
   isActive: boolean
   onClick: () => void
+  onAvatarClick?: (chat: Chat) => void
 }) {
   const avatar = resolveChatAvatar(chat, currentUserId)
   const name = resolveChatName(chat, currentUserId)
@@ -127,9 +142,14 @@ function ChatRow({
       }}
     >
       <ListItemAvatar sx={{ minWidth: 62 }}>
-        <Avatar src={avatar.src} sx={{ bgcolor: avatar.color, width: 50, height: 50 }}>
-          {avatar.initials}
-        </Avatar>
+        <ChatAvatar
+          src={avatar.src}
+          initials={avatar.initials}
+          color={avatar.color}
+          size={50}
+          label={`Профиль ${name}`}
+          onClick={() => onAvatarClick?.(chat)}
+        />
       </ListItemAvatar>
       <ListItemText
         disableTypography
@@ -195,13 +215,22 @@ export default function ChatWidget({
   const [showPeople, setShowPeople] = useState(false)
   const [createOpen, setCreateOpen] = useState(false)
   const [selectedChatId, setSelectedChatId] = useState<number | null>(null)
+  const [infoTarget, setInfoTarget] = useState<InfoTarget | null>(null)
   const [messageText, setMessageText] = useState('')
   const [searchQuery, setSearchQuery] = useState('')
   const [soundOn, setSoundOn] = useState<boolean>(() => soundSettings.enabled)
   const [emojiAnchor, setEmojiAnchor] = useState<HTMLElement | null>(null)
+  const [chatMenuAnchor, setChatMenuAnchor] = useState<HTMLElement | null>(null)
+  const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
-  useChatRealtime(selectedChatId)
+  const handleChatDeleted = useCallback(() => {
+    setInfoTarget(null)
+    setSelectedChatId(null)
+  }, [])
+
+  useChatRealtime(selectedChatId, handleChatDeleted)
+  useUserRealtime()
 
   const { data: users = [], isLoading: usersLoading, isError: usersError } = useQuery<User[]>({
     queryKey: ['chat-users'],
@@ -221,6 +250,23 @@ export default function ChatWidget({
     () => chats.find((c) => c.id === selectedChatId) ?? null,
     [chats, selectedChatId],
   )
+
+  const infoChat = useMemo(
+    () => (infoTarget?.kind === 'chat' ? chats.find((c) => c.id === infoTarget.chatId) ?? null : null),
+    [chats, infoTarget],
+  )
+
+  const infoUser = useMemo(
+    () =>
+      infoTarget?.kind === 'user'
+        ? resolveUserProfile({ userId: infoTarget.userId, users, chats, seed: infoTarget.seed })
+        : null,
+    [chats, infoTarget, users],
+  )
+
+  useEffect(() => {
+    if (!open || minimized) setInfoTarget(null)
+  }, [open, minimized])
 
   const filteredUsers = useMemo(() => {
     const q = searchQuery.trim().toLowerCase()
@@ -244,6 +290,7 @@ export default function ChatWidget({
   const handleSelectChat = useCallback((chatId: number) => {
     setSelectedChatId(chatId)
     setShowPeople(false)
+    setInfoTarget(null)
     apiClient.post(`/v1/chat/${chatId}/read`).catch(() => {})
   }, [])
 
@@ -271,6 +318,62 @@ export default function ChatWidget({
     },
     [handleSelectChat, queryClient],
   )
+
+  const handleOpenChatInfo = useCallback(
+    (chat: Chat) => {
+      setEmojiAnchor(null)
+      if (chat.type === 'dm') {
+        const partner = findDmPartner(chat, currentUserId)
+        if (partner) {
+          setInfoTarget({ kind: 'user', userId: partner.id, seed: partner })
+          return
+        }
+      }
+      setInfoTarget({ kind: 'chat', chatId: chat.id })
+    },
+    [currentUserId],
+  )
+
+  const handleMessageAvatarClick = useCallback(
+    (sender: { id: number; first_name?: string; last_name?: string; avatar?: string | null }) => {
+      setInfoTarget({ kind: 'user', userId: sender.id, seed: sender })
+    },
+    [],
+  )
+
+  const handleRenameChat = useCallback(
+    async (name: string) => {
+      if (!selectedChatId) return
+      await apiClient.patch(`/v1/chat/${selectedChatId}`, { name })
+      await queryClient.invalidateQueries({ queryKey: ['chat-my'] })
+    },
+    [selectedChatId, queryClient],
+  )
+
+  const handleLeaveChat = useCallback(async () => {
+    if (!selectedChatId) return
+    await apiClient.post(`/v1/chat/${selectedChatId}/leave`)
+    setInfoTarget(null)
+    setSelectedChatId(null)
+    await queryClient.invalidateQueries({ queryKey: ['chat-my'] })
+  }, [selectedChatId, queryClient])
+
+  const handleAddMembers = useCallback(
+    async (userIds: number[]) => {
+      if (!selectedChatId) return
+      await apiClient.post(`/v1/chat/${selectedChatId}/members`, { user_ids: userIds })
+      await queryClient.invalidateQueries({ queryKey: ['chat-my'] })
+    },
+    [selectedChatId, queryClient],
+  )
+
+  const handleDeleteChat = useCallback(async () => {
+    if (!selectedChatId) return
+    await apiClient.delete(`/v1/chat/${selectedChatId}`)
+    setInfoTarget(null)
+    setSelectedChatId(null)
+    await queryClient.invalidateQueries({ queryKey: ['chat-my'] })
+  }, [selectedChatId, queryClient])
 
   const handleSendMessage = useCallback(async () => {
     const text = messageText.trim()
@@ -419,9 +522,14 @@ export default function ChatWidget({
               <BackIcon />
             </IconButton>
             {selectedAvatar && (
-              <Avatar src={selectedAvatar.src} sx={{ bgcolor: selectedAvatar.color, width: 34, height: 34, fontSize: '0.8rem' }}>
-                {selectedAvatar.initials}
-              </Avatar>
+              <ChatAvatar
+                src={selectedAvatar.src}
+                initials={selectedAvatar.initials}
+                color={selectedAvatar.color}
+                size={34}
+                label={`Профиль ${selectedName}`}
+                onClick={() => selectedChat && handleOpenChatInfo(selectedChat)}
+              />
             )}
             <Box sx={{ flex: 1, minWidth: 0 }}>
               <Typography noWrap sx={{ fontSize: '0.95rem', fontWeight: 600, color: tg.text }}>
@@ -431,6 +539,13 @@ export default function ChatWidget({
                 {selectedChat ? chatSubtitle(selectedChat) : ''}
               </Typography>
             </Box>
+            <IconButton
+              size="small"
+              onClick={(e) => setChatMenuAnchor(e.currentTarget)}
+              aria-label="Действия с чатом"
+            >
+              <MoreVertIcon />
+            </IconButton>
           </>
         ) : showPeople ? (
           <>
@@ -487,7 +602,7 @@ export default function ChatWidget({
         </Box>
       ) : selectedChatId ? (
         <>
-          <ChatMessages chatId={selectedChatId} />
+          <ChatMessages chatId={selectedChatId} onAvatarClick={handleMessageAvatarClick} />
 
           {/* Composer */}
           <Box
@@ -659,6 +774,7 @@ export default function ChatWidget({
                   currentUserId={currentUserId}
                   isActive={chat.id === selectedChatId}
                   onClick={() => handleSelectChat(chat.id)}
+                  onAvatarClick={handleOpenChatInfo}
                 />
               ))}
             {!chatsLoading && !chatsError && chats.length === 0 && (
@@ -669,6 +785,90 @@ export default function ChatWidget({
           </Box>
         </>
       )}
+
+      <Menu
+        anchorEl={chatMenuAnchor}
+        open={Boolean(chatMenuAnchor)}
+        onClose={() => setChatMenuAnchor(null)}
+      >
+        <MenuItem
+          onClick={() => {
+            setChatMenuAnchor(null)
+            if (selectedChat) handleOpenChatInfo(selectedChat)
+          }}
+        >
+          Информация
+        </MenuItem>
+        <MenuItem
+          onClick={() => {
+            setChatMenuAnchor(null)
+            setConfirmDeleteOpen(true)
+          }}
+          sx={{ color: '#d32f2f' }}
+        >
+          Удалить чат
+        </MenuItem>
+      </Menu>
+
+      <Dialog open={confirmDeleteOpen} onClose={() => setConfirmDeleteOpen(false)}>
+        <DialogTitle>Удалить чат?</DialogTitle>
+        <DialogContent>
+          <Typography sx={{ fontSize: '0.9rem' }}>
+            Чат будет удалён для всех участников. Это действие нельзя отменить.
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setConfirmDeleteOpen(false)} sx={{ textTransform: 'none' }}>
+            Отмена
+          </Button>
+          <Button
+            color="error"
+            onClick={() => {
+              setConfirmDeleteOpen(false)
+              handleDeleteChat()
+            }}
+            sx={{ textTransform: 'none' }}
+          >
+            Удалить
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <ChatInfoPanel
+        open={Boolean(infoTarget)}
+        title={infoTarget?.kind === 'user' ? 'Профиль' : 'Информация'}
+        onClose={() => setInfoTarget(null)}
+      >
+        {infoTarget?.kind === 'user' && infoUser && (
+          <UserInfoPanel
+            user={infoUser}
+            memberRole={findChatMember(chats, infoUser.id)?.pivot?.role}
+            isSelf={infoUser.id === currentUserId}
+            canStartChat={
+              !(
+                selectedChat?.type === 'dm' &&
+                findDmPartner(selectedChat, currentUserId)?.id === infoUser.id
+              )
+            }
+            onStartChat={() => {
+              setInfoTarget(null)
+              handleStartChat(infoUser.id)
+            }}
+          />
+        )}
+        {infoTarget?.kind === 'chat' && infoChat && (
+          <GroupInfoPanel
+            chat={infoChat}
+            currentUserId={currentUserId}
+            canManage={isChatAdmin(infoChat, currentUserId)}
+            users={users.filter((u) => !infoChat.members?.some((m) => m.id === u.id))}
+            onRename={handleRenameChat}
+            onLeave={handleLeaveChat}
+            onAddMembers={handleAddMembers}
+            onDelete={handleDeleteChat}
+          />
+        )}
+      </ChatInfoPanel>
     </Box>
     <CreateChatDialog
       open={createOpen}

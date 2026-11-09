@@ -5,13 +5,16 @@ export interface User {
   last_name: string
   avatar: string | null
   status?: string
+  role?: { id: number; name: string } | null
 }
+
+export type ChatMemberRole = 'admin' | 'member' | 'muted'
 
 export interface ChatMember extends User {
   pivot?: {
     chat_id: number
     user_id: number
-    role: 'admin' | 'member' | 'muted'
+    role: ChatMemberRole
     last_read_at: string | null
   }
 }

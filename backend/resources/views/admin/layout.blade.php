@@ -199,6 +199,7 @@
         <a href="{{ route('admin.priorities.index') }}" class="{{ request()->routeIs('admin.priorities.*') ? 'active' : '' }}">🎯 Приоритеты</a>
         <a href="{{ route('admin.roles.index') }}" class="{{ request()->routeIs('admin.roles.*') ? 'active' : '' }}">🔐 Роли</a>
         <a href="{{ route('admin.spaces.index') }}" class="{{ request()->routeIs('admin.spaces.*') ? 'active' : '' }}">📚 Пространства</a>
+        <a href="{{ route('admin.releases.index') }}" class="{{ request()->routeIs('admin.releases.*') ? 'active' : '' }}">🚀 Релизы</a>
     </nav>
     
     <main class="admin-content">

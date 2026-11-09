@@ -416,6 +416,8 @@ docker run --rm -v tasksbase-knowledgebase_storage_data:/data -v $PWD:/backup al
 - [ ] Настроен регулярный бэкап БД и `storage_data`
 - [ ] Сменён пароль ntfy (`NTFY_PASSWORD`) и он совпадает в compose, `backend/.env.production` и клиентах
 - [ ] Порт 8081 открыт только для ntfy; auth включён (`deny-all`)
+- [ ] 1С-интеграция: заданы `ONE_C_TOKEN`/`ONE_C_HMAC_SECRET`, при возможности `ONE_C_ALLOWED_IPS`
+- [ ] Релизы: при включённой проверке подписи настроены `UPDATES_VERIFY_*`, каталог `./updates` доступен на запись `app`
 
 ---
 
@@ -467,7 +469,7 @@ gradle -p android :desktop:packageMsi
 
 ## Шаг 15. Сервер обновлений (самообновление приложений)
 
-Обновления отдаёт nginx из каталога `./updates` (монтируется в контейнер как `/var/www/updates`, публичный порт 80).
+Обновления отдаёт nginx из каталога `./updates`. Каталог монтируется в `nginx` (только чтение) и в `app` (read-write, для загрузки через админку) как `/var/www/updates`. Публичный порт 80.
 
 Структура:
 ```
@@ -485,7 +487,25 @@ updates/
 - `GET /updates/android/latest.json`, `GET /updates/android/<file>.apk`
 - `GET /updates/windows/latest.json`, `GET /updates/windows/<file>.msi`
 
-### 15.1 Публикация новой версии
+### 15.1 Загрузка через веб-админку (рекомендуется)
+
+В SPA-админке: **Панель администратора → Релизы приложений**. Форма позволяет выбрать платформу (Android/Windows), версию, `versionCode`, описание и файл. Сервер:
+- проверяет расширение по whitelist (`apk/aab` для Android, `msi/exe/zip` для Windows);
+- (опционально) проверяет подпись бинарника перед публикацией;
+- сохраняет файл в `updates/<platform>/`, считает SHA-256 и атомарно перезаписывает `latest.json`.
+
+API-слой для SPA не используется — раздел живёт в Laravel Blade-админке: `http://<server>/admin/releases` (вход администратора через сессию). Ссылка также есть в меню админки («🚀 Релизы»).
+
+Проверка подписи (опционально, fail-closed):
+```bash
+# backend/.env.production
+UPDATES_VERIFY_SIGNATURE=true
+UPDATES_VERIFY_ANDROID="apksigner verify --print-certs %s"
+UPDATES_VERIFY_WINDOWS="osslsigncode verify -in %s"
+```
+Инструменты должны быть установлены в контейнере `app`; `%s` заменяется на путь к файлу.
+
+### 15.2 Публикация из CLI
 
 ```powershell
 # Android
@@ -497,7 +517,7 @@ updates/
 
 Скрипт копирует файл в `updates/<platform>/`, считает SHA-256 и обновляет `latest.json`. Пересборка nginx не нужна — файлы видны сразу (bind-mount).
 
-### 15.2 Как работают приложения
+### 15.3 Как работают приложения
 
 - При запуске и по пункту меню **«Проверить обновления»** приложение опрашивает `/updates/<platform>/latest.json` на своём сервере.
 - Если версия новее — предлагает обновление:
@@ -509,6 +529,45 @@ updates/
 > - Windows: `APP_VERSION` в `Main.kt` и `packageVersion` в `android/desktop/build.gradle.kts`.
 >
 > URL обновлений берётся с того же сервера, что и активный аккаунт (`http://<server>/updates/...`), поэтому для разных серверов — свои обновления.
+
+---
+
+## Шаг 16. Интеграция с 1С (опционально)
+
+Входящие запросы 1С идут на `/api/v1/integration/1c/*` (без пользовательской сессии) и защищены токеном и/или HMAC-подписью.
+
+```bash
+# backend/.env.production
+ONE_C_ENABLED=true
+ONE_C_BASE_URL=http://1c-host/base/hs/tasksbase   # для исходящих вызовов Laravel → 1С
+ONE_C_TOKEN=<bearer-токен>
+ONE_C_HMAC_SECRET=<shared-secret>
+ONE_C_ALLOWED_IPS=10.0.0.5,10.0.0.6               # опционально, через запятую
+ONE_C_TIMESTAMP_TOLERANCE=300
+```
+
+- Подпись 1С: `X-Signature = hex(hmac_sha256("{X-Timestamp}.{raw_body}", ONE_C_HMAC_SECRET))` + заголовок `X-Timestamp`.
+- Если интеграция включена, но токен и секрет пусты — эндпоинты отвечают `503` (fail-closed).
+- Rate limit: 120 запросов/мин; опциональный IP-allowlist.
+
+Планировщик подтягивает изменения задач из 1С ежечасно (`routes/console.php`), либо вручную:
+
+```bash
+docker compose -f docker-compose.prod.yml exec app php artisan one-c:pull-issues --since="2026-01-01T00:00:00Z"
+```
+
+Не забудьте запускать Laravel scheduler в контейнере `worker` (`php artisan schedule:work`) или через cron.
+
+---
+
+## Шаг 17. Обслуживание чатов
+
+Команда для починки исторически «битых» личных чатов (dm не с ровно двумя участниками):
+
+```bash
+docker compose -f docker-compose.prod.yml exec app php artisan chat:repair-dm --strategy=group --dry-run
+# затем без --dry-run для применения; --strategy=prune оставит по 2 участника
+```
 
 ---
 

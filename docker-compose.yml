@@ -7,7 +7,9 @@ services:
     container_name: tasksbase-knowledgebase-app
     volumes:
       - ./backend:/var/www/html
-      - ./backend/docker/opcache.ini:/usr/local/etc/php/conf.d/zz-opcache.ini
+      - ./backend/docker/opcache.dev.ini:/usr/local/etc/php/conf.d/zz-opcache.ini
+      - ./backend/docker/uploads.ini:/usr/local/etc/php/conf.d/zz-uploads.ini
+      - ./updates:/var/www/updates
     dns:
       - 8.8.8.8
       - 8.8.4.4

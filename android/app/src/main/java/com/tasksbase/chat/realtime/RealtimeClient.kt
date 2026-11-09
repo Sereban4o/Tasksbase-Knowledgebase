@@ -49,6 +49,9 @@ class RealtimeClient(
     /** Invoked for MessageCreated delivered to the personal `private-user.*` channel. */
     var onUserMessage: ((JSONObject) -> Unit)? = null
 
+    /** Invoked when a chat is deleted for everyone; receives the chat id. */
+    var onChatDeleted: ((Int) -> Unit)? = null
+
     private fun wsUrl(): String =
         "ws://$host:$port/app/$key?protocol=7&client=android&version=1.0&flash=false"
 
@@ -135,6 +138,15 @@ class RealtimeClient(
                     val data = runCatching { JSONObject(obj.optString("data")) }.getOrNull()
                     if (data != null) {
                         onUserMessage?.invoke(data)
+                    }
+                }
+
+                if (event.endsWith("ChatDeleted")) {
+                    val data = runCatching { JSONObject(obj.optString("data")) }.getOrNull()
+                    val chatId = data?.optInt("chat_id", -1) ?: -1
+                    if (chatId > 0) {
+                        onChatDeleted?.invoke(chatId)
+                        onMessageEvent?.invoke()
                     }
                 }
             }

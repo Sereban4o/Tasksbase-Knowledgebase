@@ -128,21 +128,26 @@ export function useChatRealtime(chatId: number | null, onDeleted?: () => void): 
       queryClient.invalidateQueries({ queryKey: ['chat-my'] })
     }
 
-    const refreshList = () => {
-      queryClient.invalidateQueries({ queryKey: ['chat-my'] })
+    // Coalesce bursts of message events into a single refetch.
+    let refreshTimer: ReturnType<typeof setTimeout> | null = null
+    const scheduleRefresh = () => {
+      if (refreshTimer) clearTimeout(refreshTimer)
+      refreshTimer = setTimeout(refresh, 350)
     }
 
     const handleDeleted = () => {
-      refreshList()
+      if (refreshTimer) clearTimeout(refreshTimer)
+      queryClient.invalidateQueries({ queryKey: ['chat-my'] })
       onDeleted?.()
     }
 
-    channel.listen('MessageCreated', refresh)
-    channel.listen('MessageUpdated', refresh)
-    channel.listen('MessageDeleted', refresh)
+    channel.listen('MessageCreated', scheduleRefresh)
+    channel.listen('MessageUpdated', scheduleRefresh)
+    channel.listen('MessageDeleted', scheduleRefresh)
     channel.listen('ChatDeleted', handleDeleted)
 
     return () => {
+      if (refreshTimer) clearTimeout(refreshTimer)
       try {
         channel.stopListening('MessageCreated')
         channel.stopListening('MessageUpdated')
@@ -171,14 +176,22 @@ export function useUserRealtime(): void {
     const echo = getEcho(token)
     const channel = echo.private(`user.${user.id}`)
 
-    const refresh = () => {
+    const refreshNow = () => {
       queryClient.invalidateQueries({ queryKey: ['chat-my'] })
     }
 
-    channel.listen('ChatDeleted', refresh)
-    channel.listen('MessageCreated', refresh)
+    // Debounce list refreshes triggered by incoming messages.
+    let refreshTimer: ReturnType<typeof setTimeout> | null = null
+    const scheduleRefresh = () => {
+      if (refreshTimer) clearTimeout(refreshTimer)
+      refreshTimer = setTimeout(refreshNow, 500)
+    }
+
+    channel.listen('ChatDeleted', refreshNow)
+    channel.listen('MessageCreated', scheduleRefresh)
 
     return () => {
+      if (refreshTimer) clearTimeout(refreshTimer)
       try {
         channel.stopListening('ChatDeleted')
         channel.stopListening('MessageCreated')

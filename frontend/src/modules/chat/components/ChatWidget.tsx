@@ -242,7 +242,7 @@ export default function ChatWidget({
     queryKey: ['chat-my'],
     queryFn: async () => unwrapList<Chat>(await apiClient.get('/v1/chat/my', { params: { per_page: 50 } })),
     staleTime: 5_000,
-    refetchInterval: 30_000,
+    refetchInterval: 60_000,
     refetchOnWindowFocus: true,
   })
 

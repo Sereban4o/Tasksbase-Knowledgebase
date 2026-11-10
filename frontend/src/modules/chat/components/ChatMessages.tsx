@@ -62,7 +62,7 @@ function ChatMessages({ chatId, onAvatarClick }: ChatMessagesProps) {
       return unwrapList<Message>(res).slice().reverse()
     },
     staleTime: 5_000,
-    refetchInterval: 30_000,
+    refetchInterval: 60_000,
     refetchOnWindowFocus: true,
   })
 

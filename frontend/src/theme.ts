@@ -116,7 +116,7 @@ const palette = {
 const theme = createTheme({
   palette,
   typography: {
-    fontFamily: '"Inter", "Roboto", "Helvetica", "Arial", sans-serif',
+    fontFamily: '"Inter", "Helvetica", "Arial", sans-serif',
     h1: {
       fontSize: '2rem',
       fontWeight: 600,
@@ -411,8 +411,6 @@ const theme = createTheme({
 // ─── Custom CSS for global styles ────────────────────────────────────────────
 const style = document.createElement('style')
 style.textContent = `
-  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
-  
   * {
     scrollbar-width: thin;
     scrollbar-color: #D0D5DD transparent;

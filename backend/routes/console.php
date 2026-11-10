@@ -9,3 +9,5 @@ use Illuminate\Support\Facades\Schedule;
 */
 
 Schedule::command('one-c:pull-issues')->hourly()->withoutOverlapping();
+Schedule::command('queue:prune-failed --hours=168')->weekly();
+Schedule::command('queue:prune-batches --hours=24')->daily();

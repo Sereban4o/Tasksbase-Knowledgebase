@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Password;
 use Illuminate\Support\Str;
@@ -32,6 +33,8 @@ class AuthController extends Controller
             'last_name' => $validated['last_name'],
             'status' => 'active',
         ]);
+
+        Cache::forget('users.all');
 
         $token = $user->createToken('auth_token')->plainTextToken;
 
@@ -114,7 +117,12 @@ class AuthController extends Controller
 
     public function allUsers()
     {
-        return response()->json(User::where('status', 'active')->with('role')->get());
+        // Short-lived cache: the chat user picker calls this often.
+        $users = Cache::remember('users.all', 60, function () {
+            return User::where('status', 'active')->with('role')->get();
+        });
+
+        return response()->json($users);
     }
 
     public function updateProfile(Request $request)
@@ -147,6 +155,8 @@ class AuthController extends Controller
 
         $user->update($validated);
 
+        Cache::forget('users.all');
+
         return response()->json($user->load('role'));
     }
 
@@ -160,6 +170,8 @@ class AuthController extends Controller
         $path = $file->store('avatars', 'public');
 
         $request->user()->update(['avatar' => $path]);
+
+        Cache::forget('users.all');
 
         return response()->json(['avatar' => $path]);
     }

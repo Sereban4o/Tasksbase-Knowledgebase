@@ -108,7 +108,7 @@ fun ChatListScreen(
                 }
                 .onFailure { if (chats.isEmpty()) error = friendlyError(it) }
             loading = false
-            delay(15_000)
+            delay(30_000)
         }
     }
 

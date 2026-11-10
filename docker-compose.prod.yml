@@ -48,7 +48,7 @@ services:
       - ./backend/.env.production
     volumes:
       - storage_data:/var/www/html/storage
-    command: php artisan queue:work --sleep=3 --tries=3 --max-time=3600
+    command: php artisan queue:work --sleep=3 --tries=3 --max-time=3600 --memory=512
     depends_on:
       postgres:
         condition: service_healthy

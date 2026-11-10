@@ -265,10 +265,10 @@ docker compose -f docker-compose.prod.yml exec app php artisan migrate --force
 ### 6.5 Обновить кэш
 
 ```bash
-docker compose -f docker-compose.prod.yml exec app php artisan config:cache
-docker compose -f docker-compose.prod.yml exec app php artisan route:cache
-docker compose -f docker-compose.prod.yml exec app php artisan view:cache
+docker compose -f docker-compose.prod.yml exec app php artisan optimize
 ```
+
+`php artisan optimize` кэширует конфиг, роуты, события и представления (эквивалент `config:cache` + `route:cache` + `event:cache` + `view:cache`).
 
 > Если меняли `backend/.env.production`: сначала `php artisan config:clear`, затем `config:cache` и `up -d --force-recreate app worker reverb`.
 
@@ -409,7 +409,7 @@ docker run --rm -v tasksbase-knowledgebase_storage_data:/data -v $PWD:/backup al
 
 - [ ] Сменён пароль `admin@example.com`
 - [ ] Заданы сильные `POSTGRES_PASSWORD`/`DB_PASSWORD`, `REVERB_APP_SECRET`, `MEILI_MASTER_KEY`
-- [ ] `APP_DEBUG=false`, `APP_ENV=production`
+- [ ] `APP_DEBUG=false`, `APP_ENV=production`, `LOG_LEVEL=warning`
 - [ ] Наружу открыты только 22/80/8081 (443 позже); БД, Redis, Meilisearch, Reverb **не** опубликованы
 - [ ] `.env` / `.env.production` не в git (только `*.example`), доступ к репо — deploy key (read-only)
 - [ ] SSH ограничен по IP (по возможности)
@@ -587,7 +587,6 @@ git push origin master vX.Y.Z
 cd /opt/tasksbase && git fetch --tags --prune && git checkout vX.Y.Z
 docker compose -f docker-compose.prod.yml up -d --build
 docker compose -f docker-compose.prod.yml exec app php artisan migrate --force
-docker compose -f docker-compose.prod.yml exec app php artisan config:cache
-docker compose -f docker-compose.prod.yml exec app php artisan route:cache
+docker compose -f docker-compose.prod.yml exec app php artisan optimize
 curl -fsS http://localhost/up && echo OK
 ```

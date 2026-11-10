@@ -743,7 +743,7 @@ private fun ChatList(active: Account?, onOpen: (ChatDto) -> Unit) {
             }
                 .onSuccess { chats = it; error = null; loading = false }
                 .onFailure { if (chats.isEmpty()) error = it.message; loading = false }
-            delay(15_000)
+            delay(30_000)
         }
     }
 
@@ -810,7 +810,7 @@ private fun ChatView(chat: ChatDto, active: Account?, onBack: () -> Unit) {
     LaunchedEffect(chat.id) {
         while (isActive) {
             refresh()
-            delay(5_000)
+            delay(15_000)
         }
     }
 

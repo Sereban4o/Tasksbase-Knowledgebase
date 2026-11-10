@@ -576,6 +576,17 @@ composer require darkaonline/l5-swagger
 - [x] Безопасность релизов: whitelist расширений, `Content-Disposition: attachment`, проверка подписи (опционально)
 - [x] Убран токен из URL в переходе на Laravel Admin Panel
 
+### Спринт 6: Оптимизация (завершён)
+- [x] Шрифты self-host (`@fontsource/inter`), без Google Fonts; только используемые веса 400–700
+- [x] Удалены мёртвые зависимости (`socket.io-client`, `react-beautiful-dnd`, `uuid`, `dayjs`) и неиспользуемый `useWebSocket.ts`
+- [x] Снижен поллинг в web/Android/Windows, добавлен debounce realtime-инвалидаций
+- [x] Индексы БД под горячие запросы: `issues(project_id, updated_at)`, `issue_comments(issue_id)`
+- [x] Кэш `GET /users/all` (60с) с инвалидацией при изменении профиля
+- [x] Деплой: `php artisan optimize`, `LOG_LEVEL=warning`; worker `--memory=512`; prune очередей по расписанию
+- [x] nginx: `open_file_cache`, `sendfile`, `tcp_nopush`, `keepalive_timeout`
+
+Отложено (требует отдельного цикла): полный переход поиска на FTS/Meilisearch, виртуализация длинных списков, OPcache preload, тюнинг PostgreSQL/Redis, CI-пайплайн.
+
 ---
 
 ## 5. 🎯 Рекомендуемый план действий

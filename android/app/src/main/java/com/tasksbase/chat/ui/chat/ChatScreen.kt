@@ -161,7 +161,7 @@ fun ChatScreen(chat: ChatDto, onBack: () -> Unit) {
         ServiceLocator.chatRepository.markRead(chat.id)
         while (isActive) {
             refresh()
-            delay(6_000)
+            delay(30_000)
         }
     }
 

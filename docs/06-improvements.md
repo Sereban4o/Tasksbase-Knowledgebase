@@ -584,6 +584,7 @@ composer require darkaonline/l5-swagger
 - [x] Кэш `GET /users/all` (60с) с инвалидацией при изменении профиля
 - [x] Деплой: `php artisan optimize`, `LOG_LEVEL=warning`; worker `--memory=512`; prune очередей по расписанию
 - [x] nginx: `open_file_cache`, `sendfile`, `tcp_nopush`, `keepalive_timeout`
+- [x] Убраны внешние runtime-ссылки: шрифты локально, mail-шаблон без `laravel.com`, Android update-URL берёт активный сервер; Docker-образы закреплены по версиям
 
 Отложено (требует отдельного цикла): полный переход поиска на FTS/Meilisearch, виртуализация длинных списков, OPcache preload, тюнинг PostgreSQL/Redis, CI-пайплайн.
 

@@ -26,8 +26,9 @@ object UpdateManager {
 
     suspend fun check(): UpdateInfo? = withContext(Dispatchers.IO) {
         runCatching {
+            val base = "http://${ServiceLocator.server.host}:${ServiceLocator.server.port}"
             val request = Request.Builder()
-                .url("http://localhost/updates/android/latest.json")
+                .url("$base/updates/android/latest.json")
                 .build()
 
             ServiceLocator.okHttp.newCall(request).execute().use { response ->
@@ -42,8 +43,9 @@ object UpdateManager {
     suspend fun downloadAndInstall(context: Context, info: UpdateInfo): Result<Unit> =
         withContext(Dispatchers.IO) {
             runCatching {
+                val base = "http://${ServiceLocator.server.host}:${ServiceLocator.server.port}"
                 val request = Request.Builder()
-                    .url("http://localhost" + info.path)
+                    .url(base + info.path)
                     .build()
 
                 val dir = File(context.cacheDir, "updates").apply { mkdirs() }

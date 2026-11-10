@@ -14,7 +14,7 @@ ENV VITE_REVERB_KEY=$VITE_REVERB_KEY
 RUN npm run build
 
 # ── Stage 2: nginx serving SPA + reverse proxy to PHP-FPM and Reverb ─────────
-FROM nginx:alpine
+FROM nginx:1.31-alpine
 
 RUN mkdir -p /etc/nginx/snippets
 

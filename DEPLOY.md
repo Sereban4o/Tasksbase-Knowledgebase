@@ -446,6 +446,8 @@ gradle -p android :desktop:packageMsi
 - MSI: `android/desktop/build/compose/binaries/main/msi/TasksbaseChat-1.0.0.msi`
 
 > MSI требует WiX — Gradle скачивает его автоматически.
+>
+> При установке MSI/EXE создаются ярлыки **на рабочем столе** и **в меню «Пуск»** (jpackage `--win-shortcut` / `--win-menu`, блок `windows { }` в `android/desktop/build.gradle.kts`). `upgradeUuid` фиксирован — не меняйте его, чтобы MSI-обновления ставились поверх, а не рядом.
 
 ### 14.3 Добавление аккаунта
 

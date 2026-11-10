@@ -30,6 +30,16 @@ compose.desktop {
             targetFormats(TargetFormat.Msi, TargetFormat.Exe)
             packageName = "TasksbaseChat"
             packageVersion = "1.0.1"
+
+            windows {
+                // Create a shortcut on the desktop and in the Start menu on install.
+                shortcut = true
+                menu = true
+                menuGroup = "Tasksbase"
+                // Per-user install (no admin required) and stable id for MSI upgrades.
+                perUserInstall = true
+                upgradeUuid = "3f2a6c1e-9b4d-4c7a-8e21-5d6f0a1b2c3d"
+            }
         }
     }
 }

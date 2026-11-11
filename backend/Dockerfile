@@ -20,7 +20,7 @@ RUN pecl install redis && docker-php-ext-enable redis
 # RUN pecl install xdebug && docker-php-ext-enable xdebug
 
 # Get latest Composer
-COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
+COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
 
 # PHP-FPM config for Docker
 COPY docker.conf /usr/local/etc/php-fpm.d/docker.conf

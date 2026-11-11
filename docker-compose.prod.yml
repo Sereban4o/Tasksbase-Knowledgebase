@@ -142,7 +142,7 @@ services:
         max-file: "3"
 
   meilisearch:
-    image: getmeili/meilisearch:v1.56.1
+    image: getmeili/meilisearch:latest
     env_file:
       - ./backend/.env.production
     volumes:
@@ -155,7 +155,7 @@ services:
         max-file: "3"
 
   ntfy:
-    image: binwiederhier/ntfy:v2.37.2
+    image: binwiederhier/ntfy
     entrypoint: ["/bin/sh", "-c"]
     command:
       - 'AUTH=/var/cache/ntfy/auth.db; if [ ! -f "$$AUTH" ]; then ntfy serve & P=$$!; sleep 3; kill $$P 2>/dev/null; wait $$P 2>/dev/null; fi; ntfy user add --ignore-exists --role=admin tasksbase || true; exec ntfy serve'

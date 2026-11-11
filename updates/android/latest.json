@@ -1,8 +1,8 @@
 {
-    "sha256":  "c165062bf5d787b7832e896b20fe561639643f244649edfe61ac1283a4e1728c",
+    "sha256":  "98d9b2c9484acfe927dbf0c9ca88a849af395895704cbf9b030fb72f2811a7de",
     "version":  "1.0.2",
     "path":  "/updates/android/app-release.apk",
     "versionCode":  3,
     "platform":  "android",
-    "notes":  "Профиль пользователя, удаление чата, создание чата/канала, self-host шрифты"
+    "notes":  "1.0.2: профиль, удаление, создание чата; manual-сборка без авто-установки: app-release-manual.apk"
 }

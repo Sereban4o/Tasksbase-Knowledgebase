@@ -21,6 +21,20 @@ android {
         buildConfigField("String", "WS_KEY", "\"chat-key\"")
     }
 
+    // Two builds: "selfupdate" (in-app APK install) and "manual" (no install permission).
+    flavorDimensions += "update"
+
+    productFlavors {
+        create("selfupdate") {
+            dimension = "update"
+            buildConfigField("boolean", "SELF_UPDATE", "true")
+        }
+        create("manual") {
+            dimension = "update"
+            buildConfigField("boolean", "SELF_UPDATE", "false")
+        }
+    }
+
     val hasKeystore = file("release.keystore").exists()
 
     signingConfigs {

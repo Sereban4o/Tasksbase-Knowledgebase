@@ -43,6 +43,16 @@ object UpdateManager {
     suspend fun downloadAndInstall(context: Context, info: UpdateInfo): Result<Unit> =
         withContext(Dispatchers.IO) {
             runCatching {
+                if (!BuildConfig.SELF_UPDATE) {
+                    // Manual build: no REQUEST_INSTALL_PACKAGES — open the download in a browser.
+                    val url = "http://${ServiceLocator.server.host}:${ServiceLocator.server.port}" + info.path
+                    context.startActivity(
+                        Intent(Intent.ACTION_VIEW, android.net.Uri.parse(url))
+                            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+                    )
+                    return@runCatching Unit
+                }
+
                 val base = "http://${ServiceLocator.server.host}:${ServiceLocator.server.port}"
                 val request = Request.Builder()
                     .url(base + info.path)

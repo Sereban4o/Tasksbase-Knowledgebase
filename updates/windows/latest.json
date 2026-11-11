@@ -1,8 +1,8 @@
 {
-    "sha256":  "210dabaa95d6465d4c9c7eaeef0eb00e31d7696eb85da3ca7808a7ae0cd2b28f",
-    "version":  "1.0.1",
-    "path":  "/updates/windows/TasksbaseChat-1.0.1.msi",
-    "versionCode":  0,
+    "sha256":  "b7292486e255fe4430b732446d2bd7e5c329e96c5998440be725a35671fc86af",
+    "version":  "1.0.2",
+    "path":  "/updates/windows/TasksbaseChat-1.0.2.msi",
+    "versionCode":  3,
     "platform":  "windows",
-    "notes":  "ntfy fallback + dark theme + self-update"
+    "notes":  "Создание чата/канала и контакты, self-host шрифты, ярлыки"
 }

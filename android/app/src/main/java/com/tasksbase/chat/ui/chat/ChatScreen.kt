@@ -28,6 +28,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.AttachFile
 import androidx.compose.material.icons.filled.EmojiEmotions
 import androidx.compose.material.icons.filled.Image
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Send
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
@@ -203,7 +204,7 @@ fun ChatScreen(chat: ChatDto, onBack: () -> Unit) {
                     }
                 },
                 title = {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
+                    Row(modifier = Modifier.clickable { showInfo = true }, verticalAlignment = Alignment.CenterVertically) {
                         ChatAvatar(
                             avatarUrl = chatAvatarUrl(chat, myId),
                             fallbackText = chatAvatarText(chat, myId),
@@ -222,6 +223,11 @@ fun ChatScreen(chat: ChatDto, onBack: () -> Unit) {
                             )
                             Text(text = chatSubtitle(chat), fontSize = 12.sp, color = LocalChatPalette.current.secondary)
                         }
+                    }
+                },
+                actions = {
+                    IconButton(onClick = { showInfo = true }) {
+                        Icon(Icons.Default.MoreVert, contentDescription = "Информация о чате")
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = LocalChatPalette.current.surface),

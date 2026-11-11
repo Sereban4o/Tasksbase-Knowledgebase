@@ -1,8 +1,8 @@
 {
-    "sha256":  "a466e26def982ef97dc2469fbf41c7c37c491af2242696e50bfd42b46d8c6839",
-    "version":  "1.0.1",
-    "path":  "/updates/android/app-debug.apk",
-    "versionCode":  2,
+    "sha256":  "c165062bf5d787b7832e896b20fe561639643f244649edfe61ac1283a4e1728c",
+    "version":  "1.0.2",
+    "path":  "/updates/android/app-release.apk",
+    "versionCode":  3,
     "platform":  "android",
-    "notes":  "ntfy fallback to server host + DM privacy"
+    "notes":  "Профиль пользователя, удаление чата, создание чата/канала, self-host шрифты"
 }

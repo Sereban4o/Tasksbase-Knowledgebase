@@ -611,6 +611,7 @@ private fun MainScreen(
 ) {
     var menuOpen by remember { mutableStateOf(false) }
     var showSettings by remember { mutableStateOf(false) }
+    var showCreate by remember { mutableStateOf(false) }
 
     val scope = rememberCoroutineScope()
     var updateInfo by remember { mutableStateOf<DesktopUpdate?>(null) }
@@ -672,6 +673,8 @@ private fun MainScreen(
                 Spacer(Modifier.weight(1f))
                 if (selectedChat != null) {
                     TextButton(onClick = onBack) { Text("← Назад") }
+                } else {
+                    TextButton(onClick = { showCreate = true }) { Text("➕ Новый чат") }
                 }
             }
         }
@@ -685,6 +688,18 @@ private fun MainScreen(
                 ChatView(selectedChat, active, onBack)
             }
         }
+    }
+
+    if (showCreate) {
+        CreateChatDialogDesktop(
+            myId = active?.user?.id,
+            onDismiss = { showCreate = false },
+            onCreated = { chat ->
+                showCreate = false
+                RealtimeController.tick.value++
+                onSelectChat(chat)
+            },
+        )
     }
 
     if (showSettings) {
@@ -720,6 +735,127 @@ private fun MainScreen(
             dismissButton = { TextButton(onClick = { updateInfo = null }) { Text("Позже") } },
         )
     }
+}
+
+@Composable
+private fun CreateChatDialogDesktop(
+    myId: Int?,
+    onDismiss: () -> Unit,
+    onCreated: (ChatDto) -> Unit,
+) {
+    val scope = rememberCoroutineScope()
+    var users by remember { mutableStateOf<List<UserDto>>(emptyList()) }
+    var type by remember { mutableStateOf("channel") }
+    var name by remember { mutableStateOf("") }
+    var description by remember { mutableStateOf("") }
+    var selected by remember { mutableStateOf<Set<Int>>(emptySet()) }
+    var loading by remember { mutableStateOf(false) }
+    var error by remember { mutableStateOf<String?>(null) }
+
+    LaunchedEffect(Unit) {
+        runCatching { withContext(Dispatchers.IO) { Net.api.users() } }
+            .onSuccess { users = it }
+            .onFailure { error = it.message ?: "Не удалось загрузить контакты" }
+    }
+
+    val contacts = users.filter { it.id != myId }
+
+    AlertDialog(
+        onDismissRequest = { if (!loading) onDismiss() },
+        title = { Text("Новый чат") },
+        text = {
+            Column(Modifier.widthIn(max = 520.dp).heightIn(max = 520.dp).verticalScroll(rememberScrollState())) {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    listOf("dm" to "Личный", "group" to "Группа", "channel" to "Канал").forEach { (value, label) ->
+                        TextButton(
+                            onClick = { type = value; selected = emptySet(); error = null },
+                            colors = androidx.compose.material3.ButtonDefaults.textButtonColors(
+                                contentColor = if (type == value) Accent else MaterialTheme.colorScheme.onSurfaceVariant,
+                            ),
+                        ) { Text(label, fontWeight = if (type == value) FontWeight.SemiBold else FontWeight.Normal) }
+                    }
+                }
+
+                if (type != "dm") {
+                    Spacer(Modifier.size(8.dp))
+                    OutlinedTextField(name, { name = it }, label = { Text("Название") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                    Spacer(Modifier.size(8.dp))
+                    OutlinedTextField(description, { description = it }, label = { Text("Описание (необязательно)") }, modifier = Modifier.fillMaxWidth())
+                }
+
+                Spacer(Modifier.size(10.dp))
+                Text(if (type == "dm") "Выберите собеседника" else "Контакты", fontWeight = FontWeight.SemiBold)
+                Spacer(Modifier.size(6.dp))
+
+                if (contacts.isEmpty()) {
+                    Text("Контактов нет", color = Muted, fontSize = 12.sp)
+                } else {
+                    contacts.forEach { user ->
+                        val checked = selected.contains(user.id)
+                        Row(
+                            modifier = Modifier.fillMaxWidth().clickable {
+                                selected = when {
+                                    type == "dm" -> if (checked) emptySet() else setOf(user.id)
+                                    checked -> selected - user.id
+                                    else -> selected + user.id
+                                }
+                            }.padding(vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Checkbox(checked = checked, onCheckedChange = null)
+                            InitialsAvatar(text = user.initials, color = avatarColor(user.id), size = 28)
+                            Spacer(Modifier.size(8.dp))
+                            Text(user.fullName)
+                        }
+                    }
+                }
+
+                if (error != null) {
+                    Spacer(Modifier.size(8.dp))
+                    Text(error!!, color = MaterialTheme.colorScheme.error, fontSize = 12.sp)
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = {
+                    val trimmed = name.trim()
+                    val validation = when {
+                        type == "dm" && selected.isEmpty() -> "Выберите собеседника"
+                        type != "dm" && trimmed.isEmpty() -> "Введите название"
+                        else -> null
+                    }
+                    if (validation != null) {
+                        error = validation
+                        return@Button
+                    }
+                    loading = true
+                    error = null
+                    scope.launch {
+                        try {
+                            val chat = withContext(Dispatchers.IO) {
+                                Net.api.createChat(
+                                    CreateChatRequest(
+                                        type = type,
+                                        name = if (type == "dm") null else trimmed,
+                                        description = if (type == "dm") null else description.trim().ifBlank { null },
+                                        userIds = selected.toList(),
+                                    ),
+                                )
+                            }
+                            onCreated(chat)
+                        } catch (e: Exception) {
+                            error = e.message ?: "Не удалось создать чат"
+                        } finally {
+                            loading = false
+                        }
+                    }
+                },
+                enabled = !loading,
+            ) { Text(if (loading) "Создание..." else "Создать") }
+        },
+        dismissButton = { TextButton(onClick = { if (!loading) onDismiss() }) { Text("Отмена") } },
+    )
 }
 
 @Composable
@@ -1733,7 +1869,7 @@ private object Autostart {
 
 // ───────────────────────────── Updates ─────────────────────────────
 
-private const val APP_VERSION = "1.0.1"
+private const val APP_VERSION = "1.0.2"
 
 private data class DesktopUpdate(
     val version: String = "",

@@ -11,8 +11,8 @@ android {
         applicationId = "com.tasksbase.chat"
         minSdk = 24
         targetSdk = 34
-        versionCode = 2
-        versionName = "1.0.1"
+        versionCode = 3
+        versionName = "1.0.2"
 
         // ── Default server address ──────────────────────────────────────────
         // Used until the user sets a server address/port inside the app.
@@ -21,10 +21,26 @@ android {
         buildConfigField("String", "WS_KEY", "\"chat-key\"")
     }
 
+    val hasKeystore = file("release.keystore").exists()
+
+    signingConfigs {
+        if (hasKeystore) {
+            create("release") {
+                storeFile = file("release.keystore")
+                storePassword = System.getenv("ANDROID_KEYSTORE_PASSWORD") ?: "tasksbase"
+                keyAlias = System.getenv("ANDROID_KEY_ALIAS") ?: "tasksbase"
+                keyPassword = System.getenv("ANDROID_KEY_PASSWORD") ?: "tasksbase"
+            }
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = false
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+            if (hasKeystore) {
+                signingConfig = signingConfigs.getByName("release")
+            }
         }
     }
 

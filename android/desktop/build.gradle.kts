@@ -29,7 +29,7 @@ compose.desktop {
             modules("jdk.unsupported")
             targetFormats(TargetFormat.Msi, TargetFormat.Exe)
             packageName = "TasksbaseChat"
-            packageVersion = "1.0.1"
+            packageVersion = "1.0.2"
 
             windows {
                 // Create a shortcut on the desktop and in the Start menu on install.

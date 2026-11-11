@@ -7,3 +7,6 @@ captures/
 .externalNativeBuild/
 .cxx/
 .DS_Store
+release.keystore
+*.jks
+*.keystore

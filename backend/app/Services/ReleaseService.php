@@ -69,7 +69,15 @@ class ReleaseService
         // Verify the signature of the temporary upload before publishing it.
         $this->assertSignature($platform, (string) $file->getRealPath());
 
-        $dir = $this->basePath() . '/' . $platform;
+        $base = $this->basePath();
+        if (!is_dir($base) && !@mkdir($base, 0775, true) && !is_dir($base)) {
+            throw new \RuntimeException('Каталог релизов недоступен: ' . $base);
+        }
+        if (!is_writable($base)) {
+            throw new \RuntimeException('Каталог релизов недоступен для записи: ' . $base);
+        }
+
+        $dir = $base . '/' . $platform;
         if (!is_dir($dir)) {
             mkdir($dir, 0775, true);
         }
